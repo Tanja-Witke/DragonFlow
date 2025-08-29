@@ -1,0 +1,15 @@
+<template>
+  <h1>🐉 DragonFlow</h1>
+</template>
+
+<script>
+export default {}
+</script>
+
+<style>
+body {
+  font-family: sans-serif;
+  padding: 2rem;
+  background: #f4f4f4;
+}
+</style>

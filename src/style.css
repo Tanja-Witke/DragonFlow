@@ -1,20 +1,170 @@
 @import "tailwindcss";
 
-/* Design tokens/components for the app */
-@layer components {
-  .btn-primary { @apply px-3 py-1.5 rounded-lg bg-gradient-to-br from-fuchsia-600 to-purple-600 text-white shadow hover:opacity-95 disabled:opacity-50; }
-  .btn-outline { @apply px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500; }
-  .btn-ghost   { @apply px-2 py-1 rounded hover:bg-zinc-800/70; }
-  .field       { @apply w-full bg-zinc-900/60 text-zinc-100 border border-zinc-800 rounded px-2 py-1 outline-none; }
-  .menu-pop    { @apply absolute z-10 right-0 mt-1 w-44 rounded-xl border border-zinc-800 bg-zinc-900/95 shadow-xl p-1; }
-  .menu-pop.right { @apply right-0; }
-  .menu-item   { @apply w-full text-left px-3 py-2 rounded hover:bg-zinc-800/70; }
-  .menu-item.danger { @apply text-red-400 hover:bg-red-950/40; }
-  .menu-fab    { @apply absolute bottom-12 right-0 w-60 rounded-xl border border-zinc-800 bg-zinc-900/95 shadow-2xl p-2; }
-  .divider     { @apply my-1 border-t border-zinc-800; }
-  .fab         { @apply h-12 w-12 rounded-full text-3xl leading-none grid place-content-center bg-gradient-to-br from-fuchsia-600 to-purple-600 text-white shadow-xl ring-2 ring-fuchsia-400/30 hover:scale-105 transition; }
+/* Design tokens: ToDojo v2 palette */
+:root {
+  /* core */
+  --clr-bg: #12161B;          /* Background */
+  --clr-surface: #161B22;     /* Surface */
+  --clr-card: #1B2128;        /* Card */
+  --clr-elev: #222A33;        /* Elevated */
+  --clr-border: #2C3540;      /* Border/Divider */
+  --clr-text: #E9EEF2;        /* Text Primary */
+  --clr-text-2: #A9B4BF;      /* Text Secondary */
+  --clr-muted: #86939F;       /* Muted */
+
+  /* brand & accents */
+  --clr-primary: #3FAE9C;     /* Calm Teal */
+  --clr-accent: #CFA86A;      /* Warm Sand */
+  --clr-accent-2: #B8695A;    /* Terracotta */
+
+  /* semantic */
+  --clr-success: #58B487;
+  --clr-warning: #D7B164;
+  --clr-danger:  #C75C5C;
+
+  /* utilities */
+  --clr-focus: #8AD5C7;
+  --shadow: 0 6px 24px rgba(0,0,0,.6);
+  --shadow-modal: 0 16px 40px rgba(0,0,0,.75);
 }
 
-/* optional: subtle scrollbars */
-::-webkit-scrollbar { height: 8px; width: 8px; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 9999px; }
+/* Helper palette classes */
+@layer components {
+  .app-bg      { background: var(--clr-bg); color: var(--clr-text); }
+  .side-rail   { background: color-mix(in oklab, var(--clr-card) 60%, black 40%); border-color: var(--clr-border); }
+  .surface     { background: var(--clr-card); }
+  .elev        { background: var(--clr-elev); }
+  .border-div  { border-color: var(--clr-border); }
+  .text-main   { color: var(--clr-text); }
+  .text-sec    { color: var(--clr-text-2); }
+  .text-muted  { color: var(--clr-muted); }
+  .text-primary{ color: var(--clr-primary); }
+  .bg-surface  { background: var(--clr-surface); }
+  .bg-elev     { background: var(--clr-elev); }
+  .is-active   { background: color-mix(in oklab, var(--clr-elev) 85%, black 0%); color: var(--clr-text); }
+
+  .btn-primary { @apply px-3 py-1.5 rounded-lg text-white shadow transition; background: var(--clr-primary); }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-primary:active { filter: brightness(0.95); }
+  .btn-primary:focus-visible { box-shadow: 0 0 0 2px var(--clr-focus); }
+
+  .btn-outline { @apply px-3 py-1.5 rounded-lg transition; color: var(--clr-text-2); background: var(--clr-surface); }
+  .btn-outline:hover { filter: brightness(1.05); color: var(--clr-text); }
+  .btn-outline:focus-visible { box-shadow: 0 0 0 2px var(--clr-focus); }
+  /* selected toggle state (e.g., Task/Flow in add menu) */
+  .btn-outline.is-active {
+    background: color-mix(in oklab, var(--clr-primary) 28%, var(--clr-surface) 72%);
+    color: var(--clr-text);
+  }
+
+  .btn-ghost   { @apply px-2 py-1 rounded transition; color: var(--clr-text-2); }
+  .btn-ghost:hover { background: color-mix(in oklab, var(--clr-elev) 92%, black 0%); }
+  .btn-ghost:focus-visible { box-shadow: 0 0 0 2px var(--clr-focus); }
+
+  .field       { @apply w-full rounded px-2 py-1 outline-none; background: var(--clr-surface); color: var(--clr-text); }
+
+  .menu-pop    { @apply absolute z-10 mt-1 w-44 rounded-xl shadow-xl p-1; right: 0; background: var(--clr-elev); }
+  .menu-pop.right { right: 0; }
+  .menu-pop.left { left: 0; right: auto; }
+  .menu-item   { @apply w-full text-left px-3 py-2 rounded; color: var(--clr-text-2); }
+  .menu-item:hover { background: color-mix(in oklab, var(--clr-elev) 88%, black 0%); color: var(--clr-text); }
+  .menu-item.danger { color: var(--clr-danger); }
+  .menu-item.danger:hover { background: color-mix(in oklab, var(--clr-elev) 85%, black 0%); color: var(--clr-danger); }
+
+  .menu-fab    { @apply rounded-xl shadow-2xl p-2; background: var(--clr-elev); box-shadow: var(--shadow); width: auto; min-width: 12rem; max-width: min(90vw, 22rem); }
+  .divider     { @apply my-1 border-t; border-color: var(--clr-border); }
+  /* Subtle FAB to avoid drawing main attention */
+  .fab         { @apply h-11 w-11 grid place-content-center shadow transition; background: color-mix(in oklab, var(--clr-elev) 94%, black 0%); color: var(--clr-text-2); box-shadow: var(--shadow); border-radius: 12px; }
+  .fab:hover   { background: color-mix(in oklab, var(--clr-elev) 88%, black 0%); color: var(--clr-text); transform: translateY(-1px) scale(1.04); }
+  .fab:active  { background: color-mix(in oklab, var(--clr-elev) 88%, black 0%); }
+
+  .icon { width: 22px; height: 22px; display: inline-block; color: var(--clr-text); }
+  .hover-elev:hover { background: color-mix(in oklab, var(--clr-elev) 90%, black 0%); }
+  .icon-sm { width: 18px; height: 18px; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .add-inline { display:inline-flex; align-items:center; gap:.4rem; color: var(--clr-text-2); padding:.25rem .5rem; border-radius:8px; }
+  .add-inline:hover { background: color-mix(in oklab, var(--clr-elev) 88%, black 0%); color: var(--clr-text); }
+
+  /* Task variants */
+  .task-item { @apply rounded-lg transition; position: relative; padding-right: 4px; height: 38px; }
+  .task-item:hover { background: color-mix(in oklab, var(--clr-elev) 92%, black 0%); }
+  .flow-task { position: relative; background: color-mix(in oklab, var(--clr-elev) 96%, black 0%); }
+  .flow-task::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 4px; background: var(--clr-primary); border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+  .task-item.completing { animation: taskPop 180ms ease-out, taskFade 300ms ease-in 120ms forwards; }
+
+  @keyframes taskPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.03); background: color-mix(in oklab, var(--clr-success) 18%, var(--clr-elev) 82%); }
+    100% { transform: scale(1); }
+  }
+  @keyframes taskFade { to { opacity: 0; transform: translateX(12px); } }
+
+  /* Celebration overlay (local, subtle — line rays, no circles) */
+  .celebrate-overlay { position: absolute; inset: 0; pointer-events: none; }
+  .ray { position:absolute; top:50%; left:50%; width:2px; height:10px; background: var(--clr-success); border-radius:1px; transform-origin: center; transform: translate(-50%,-50%) rotate(var(--rot)); animation: rayFly 520ms ease-out forwards; }
+  @keyframes rayFly {
+    from { opacity:.9; transform: translate(-50%,-50%) rotate(var(--rot)) scaleY(1); }
+    to   { opacity:0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)) scaleY(1.1); }
+  }
+
+  /* Add: full-line visual (kept for reference, currently not used) */
+  .add-line { position: relative; display: grid; place-content: center; height: 56px; color: var(--clr-text-2); }
+  .add-line::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--clr-border); }
+  .add-line .label { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: .5rem; padding: .25rem .6rem; border-radius: 9999px; background: var(--clr-card); }
+  .add-line:hover { color: var(--clr-text); }
+
+  /* Add tiles (muted full-card) */
+  .muted-tile { background: color-mix(in oklab, var(--clr-surface) 95%, black 5%); color: var(--clr-text-2); }
+  .muted-tile:hover { background: color-mix(in oklab, var(--clr-surface) 90%, black 10%); color: var(--clr-text); }
+
+  /* Bottom nav: icon with optional label (no hover jump) */
+  .nav-btn { display: inline-flex; align-items: center; gap: .5rem; color: var(--clr-text-2); }
+  .nav-label { opacity: 0; width: 0; max-width: 0; overflow: hidden; white-space: nowrap; transition: all .15s ease; }
+  .nav-btn.active { color: var(--clr-primary); }
+  .nav-btn.active .nav-label { opacity: 1; width: auto; max-width: 12rem; }
+
+  /* Modern FAB hover */
+  .fab:hover { transform: translateY(-1px) scale(1.04); }
+}
+
+/* Native controls */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--clr-surface) 95%, black 5%);
+  border: none;
+  display: inline-grid; place-content: center;
+  cursor: pointer;
+}
+input[type="checkbox"]:hover {
+  background: color-mix(in oklab, var(--clr-surface) 90%, black 10%);
+}
+input[type="checkbox"]:checked {
+  background: var(--clr-primary);
+  border-color: var(--clr-primary);
+}
+input[type="checkbox"]:checked::after {
+  content: '';
+  width: 8px; height: 12px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translateY(-1px) rotate(45deg);
+}
+input[type="checkbox"]:focus-visible { outline: none; box-shadow: none; }
+input[type="checkbox"]:disabled { opacity: .6; cursor: default; }
+
+/* subdued, thinner scrollbars */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--clr-border) 80%, black 20%) transparent; }
+::-webkit-scrollbar { height: 6px; width: 6px; }
+::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--clr-border) 80%, black 20%); border-radius: 9999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* place scrollbar on the left side for specific containers */
+.scrollbar-left { direction: rtl; }
+.scrollbar-left > * { direction: ltr; }
+  /* vertical list snap to avoid half-visible last row */
+  .vlist { scroll-snap-type: y mandatory; }
+  .snap-start { scroll-snap-align: start; }

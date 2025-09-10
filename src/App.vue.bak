@@ -95,7 +95,7 @@
               <!-- tasks area container (fills available height) -->
               <div class="task-area overflow-hidden">
               <!-- tasks (active only) -->
-              <ul class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll endpad">
+              <ul class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll">
                 <li
                   v-for="t in list.tasks"
                   :key="t.id"
@@ -126,8 +126,6 @@
                   <span v-for="n in 10" :key="'ray-'+t.id+'-'+n" class="ray" :style="rayStyle(n)"></span>
                 </div>
                 </li>
-                <!-- spacer matching footer height to align end exactly -->
-                <li class="footer-spacer" aria-hidden="true"></li>
               </ul>
               </div>
 
@@ -139,12 +137,11 @@
                 </div>
 
                 <!-- anchored add menu (flush to button top edge) -->
-              <div
-                v-if="ui.listAddMenuId===list.id"
-                :id="'add-menu-'+list.id"
-                class="menu-fab full menu-up space-y-2"
-                @click.stop
-              >
+                <div
+                  v-if="ui.listAddMenuId===list.id"
+                  :id="'add-menu-'+list.id"
+                  class="menu-fab full menu-up space-y-2"
+                >
                   <div class="flex gap-2 px-1">
                     <button class="btn-outline flex-1" :class="ui.addMode==='task' ? 'is-active' : ''" @click.stop="setAddMode('task')">Task</button>
                     <button class="btn-outline flex-1" :class="ui.addMode==='flow' ? 'is-active' : ''" @click.stop="setAddMode('flow')">Flow</button>
@@ -159,6 +156,7 @@
                       @blur="onTaskTitleBlur"
                     />
                     <div class="flex justify-end gap-2">
+                      <button class="btn-outline" @click.stop="toggleAddMenu(null)">Close</button>
                       <button class="btn-primary" :disabled="!ui.newTaskTitle" @click.stop="addTaskWithTitle(list)">Add Task</button>
                     </div>
                   </div>
@@ -170,10 +168,11 @@
                       <option v-for="f in flows" :key="f.id" :value="f.id">{{ f.title }}</option>
                     </select>
                     <div class="flex justify-end gap-2">
+                      <button class="btn-outline" @click.stop="toggleAddMenu(null)">Close</button>
                       <button class="btn-primary" :disabled="!ui.selectedFlowId" @click.stop="addFlowToList(list, ui.selectedFlowId)">Add Flow</button>
                     </div>
-              </div>
-            </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -432,12 +431,7 @@ export default {
     this.$nextTick(() => {
       this.updateListHeights();
       window.addEventListener('resize', this.updateListHeights, { passive: true });
-      window.addEventListener('click', this.handleGlobalClick, { passive: true });
     });
-  },
-  beforeDestroy(){
-    window.removeEventListener('resize', this.updateListHeights);
-    window.removeEventListener('click', this.handleGlobalClick);
   },
 
   watch: {
@@ -453,48 +447,12 @@ export default {
         const cards = document.querySelectorAll('.list-card');
         cards.forEach(card => {
           const style = getComputedStyle(card);
-          // Prefer precise task item height (includes padding). Fallback to CSS var.
-          let rowPrecise = parseFloat(style.getPropertyValue('--row')) || 40;
-          const firstItem = card.querySelector('.list-scroll .task-item');
-          if (firstItem) {
-            const rh = firstItem.getBoundingClientRect().height; // float with sub-pixel
-            if (rh && !Number.isNaN(rh)) rowPrecise = rh;
-          }
-
-          const footerEl = card.querySelector('.add-footer');
-          const listEl = card.querySelector('.list-scroll');
-          if (!listEl) return;
-
-          const cardH = card.getBoundingClientRect().height;
-          const footerH = footerEl ? (parseFloat(getComputedStyle(footerEl).getPropertyValue('--footer-h')) || footerEl.offsetHeight || 0) : 0;
-
-          // Use whole card as reference; subtract only fixed footer height
-          const available = Math.max(0, cardH - footerH);
-          const rows = Math.max(0, Math.floor(available / rowPrecise));
-          let listHeightPx = rows * rowPrecise;
-
-          // Device-pixel safe compensation to eliminate tiny gap without clipping
-          const diff = available - listHeightPx; // remaining space
-          if (diff > 0 && diff <= 2) {
-            listHeightPx = Math.ceil(listHeightPx + 1); // nudge by 1px
-          } else {
-            listHeightPx = Math.ceil(listHeightPx);
-          }
-
-          listEl.style.height = listHeightPx + 'px';
+          const row = parseFloat(style.getPropertyValue('--row')) || 40;
+          const taskArea = card.querySelector('.task-area');
+          const available = taskArea ? taskArea.getBoundingClientRect().height : (card.getBoundingClientRect().height);
+          const rows = Math.max(0, Math.floor(available / row));
+          card.style.setProperty('--rows', rows.toString());
         });
-      } catch {}
-    },
-    handleGlobalClick(e){
-      try {
-        const openId = this.ui.listAddMenuId;
-        if (!openId) return;
-        const menu = document.getElementById('add-menu-'+openId);
-        const anchor = document.getElementById('add-anchor-'+openId);
-        const t = e.target;
-        if (menu && (menu===t || menu.contains(t))) return;
-        if (anchor && (anchor===t || anchor.contains(t))) return;
-        this.toggleAddMenu(null);
       } catch {}
     },
     save() {

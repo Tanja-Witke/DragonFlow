@@ -26,9 +26,6 @@
   --clr-focus: #8AD5C7;
   --shadow: 0 6px 24px rgba(0,0,0,.6);
   --shadow-modal: 0 16px 40px rgba(0,0,0,.75);
-  /* responsive sizing */
-  --row: clamp(36px, 5.2vh, 64px);
-  --footer-h: clamp(66px, 7.2vh, 102px);
 }
 
 /* Helper palette classes */
@@ -77,9 +74,7 @@
   .menu-item.danger:hover { background: color-mix(in oklab, var(--clr-elev) 85%, black 0%); color: var(--clr-danger); }
 
   .menu-fab    { @apply rounded-xl shadow-2xl p-2; background: var(--clr-elev); box-shadow: var(--shadow); width: auto; min-width: 12rem; max-width: min(90vw, 22rem); }
-  /* Make full-width menus align with card inner gutters (~8px each side) */
-  /* Align full-width menus with ticket (task) content, not card edge */
-  .menu-fab.full { width: calc(100% - 22px); min-width: 0; max-width: none; border-top-left-radius: 12px; border-top-right-radius: 12px; margin: 0 11px; }
+  .menu-fab.full { width: 100%; min-width: 0; max-width: none; border-top-left-radius: 12px; border-top-right-radius: 12px; }
   .menu-up { position: absolute; left: 0; right: 0; bottom: 100%; z-index: 60; }
   .divider     { @apply my-1 border-t; border-color: var(--clr-border); }
   /* Subtle FAB to avoid drawing main attention */
@@ -97,7 +92,7 @@
   .add-inline:hover { background: color-mix(in oklab, var(--clr-elev) 88%, black 0%); color: var(--clr-text); }
 
   /* Task variants */
-  .task-item { @apply rounded-lg transition; position: relative; padding-right: 4px; height: 40px; margin: 0 !important; }
+  .task-item { @apply rounded-lg transition; position: relative; padding-right: 4px; height: 40px; }
   .task-item:hover { background: color-mix(in oklab, var(--clr-elev) 92%, black 0%); }
   .flow-task { position: relative; background: color-mix(in oklab, var(--clr-elev) 96%, black 0%); }
   .flow-task::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 4px; background: var(--clr-primary); border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
@@ -131,9 +126,9 @@
   /* Add footer: pinned bottom region of list card */
   /* Footer covers entire bottom of card with same corners */
   /* List card as grid: tasks area + footer */
-  .list-card { position: relative; overflow: hidden; }
+  .list-card { position: relative; overflow: hidden; display: grid; grid-template-rows: 1fr auto; }
   .task-area { min-height: 0; }
-  .add-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: var(--clr-card); border-top: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+  .add-footer { position: relative; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--clr-card); border-top: 1px solid var(--clr-border); padding: 0; margin: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
   /* Kill any bottom gap by removing bottom border radius and overflow */
   .list-card { border-bottom-left-radius: 0; border-bottom-right-radius: 0; overflow: hidden; }
   /* Ensure the footer hugs the bottom edge visually */
@@ -144,11 +139,8 @@
   .list-card .list-scroll { margin-bottom: 0 !important; }
   .vlist > :last-child { margin-bottom: 0 !important; }
   /* Minimise vertical footprint; keep tap target >= 36px */
-  .add-footer .new-btn { display:flex; align-items:center; justify-content:center; gap:.4rem; color: var(--clr-text-2); height: 100% !important; min-height: 100%; cursor: pointer; font-size: 0.95rem; }
+  .add-footer .new-btn { display:flex; align-items:center; justify-content:center; gap:.4rem; color: var(--clr-text-2); height: 36px; cursor: pointer; font-size: 0.95rem; }
   .add-footer .new-btn:hover { background: color-mix(in oklab, var(--clr-elev) 90%, black 0%); color: var(--clr-text); border-radius: 8px; }
-  /* Ensure inner button fills the footer height variable */
-  .add-footer { height: var(--footer-h); }
-  .add-footer .new-btn { min-height: 100%; height: 100%; }
 
   /* Bottom nav: icon with optional label (no hover jump) */
   .nav-btn { display: inline-flex; align-items: center; gap: .5rem; color: var(--clr-text-2); }
@@ -202,14 +194,9 @@ input[type="checkbox"]:disabled { opacity: .6; cursor: default; }
   /* Make the scrollable list height an integer multiple of row height.
      Row = 40px, bottom padding = 8px (pb-2). We add top/bottom inset with padding.
      Using CSS var fallback so it adapts to container height. */
-  .list-card { --pad-bottom: 0px; }
+  .list-card { --row: 40px; --pad-bottom: 0px; }
   /* footer height drives available list height; JS sets --rows */
   .add-footer { --footer-h: 36px; height: var(--footer-h); }
   .list-card { --rows: 0; }
-  .list-card .list-scroll { box-sizing: content-box; padding-bottom: 0 !important; margin: 0; height: auto; overflow-y: scroll; }
-  .list-card .list-scroll > :last-child { margin-bottom: 0 !important; }
-  .end-spacer { height: 8px; }
-  .footer-spacer { height: var(--footer-h); }
-  /* Tiny padding only at very end of scroll content */
-  .endpad::after { content: ""; display: block; height: 6px; }
+  .list-card .list-scroll { box-sizing: content-box; padding-bottom: 0 !important; margin: 0; height: calc(var(--rows) * var(--row)); }
   .snap-start { scroll-snap-align: start; }

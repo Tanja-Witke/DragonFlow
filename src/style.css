@@ -27,8 +27,9 @@
   --shadow: 0 6px 24px rgba(0,0,0,.6);
   --shadow-modal: 0 16px 40px rgba(0,0,0,.75);
   /* responsive sizing */
-  --row: clamp(36px, 5.2vh, 64px);
-  --footer-h: clamp(66px, 7.2vh, 102px);
+  --row-nominal: clamp(36px, 5vh, 64px);
+  --list-header-h: clamp(36px, 4.5vh, 64px);
+  --list-footer-h: clamp(54px, 6vh, 84px);
 }
 
 /* Helper palette classes */
@@ -97,7 +98,7 @@
   .add-inline:hover { background: color-mix(in oklab, var(--clr-elev) 88%, black 0%); color: var(--clr-text); }
 
   /* Task variants */
-  .task-item { @apply rounded-lg transition; position: relative; padding-right: 4px; height: 40px; margin: 0 !important; }
+.task-item { @apply rounded-lg transition; position: relative; padding-right: 4px; height: var(--row-fit, var(--row-nominal)); margin: 0 !important; box-sizing: border-box; }
   .task-item:hover { background: color-mix(in oklab, var(--clr-elev) 92%, black 0%); }
   .flow-task { position: relative; background: color-mix(in oklab, var(--clr-elev) 96%, black 0%); }
   .flow-task::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 4px; background: var(--clr-primary); border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
@@ -132,22 +133,24 @@
   /* Footer covers entire bottom of card with same corners */
   /* List card as grid: tasks area + footer */
   .list-card { position: relative; overflow: hidden; }
+  .list-element { position: relative; overflow: hidden; display: grid; grid-template-rows: var(--list-header-h) 1fr var(--list-footer-h); }
+  .list-header { height: var(--list-header-h); }
   .task-area { min-height: 0; }
-  .add-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: var(--clr-card); border-top: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+  .add-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: var(--clr-card); border-top: none; box-shadow: none; padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; height: var(--list-footer-h); }
+  .list-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: var(--clr-card); border-top: none; box-shadow: none; padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; height: var(--list-footer-h); }
   /* Kill any bottom gap by removing bottom border radius and overflow */
   .list-card { border-bottom-left-radius: 0; border-bottom-right-radius: 0; overflow: hidden; }
-  /* Ensure the footer hugs the bottom edge visually */
-  .list-card .add-footer { border-bottom: 0; }
+  .list-element .list-footer { border-bottom: 0; }
   /* Ensure no extra gap under the footer */
   .add-footer::after { content: ""; display: block; height: 0; }
   .list-card { margin-bottom: 0; }
-  .list-card .list-scroll { margin-bottom: 0 !important; }
+  .list-element .list-scroll { margin-bottom: 0 !important; height: 100%; overflow-y: scroll; }
   .vlist > :last-child { margin-bottom: 0 !important; }
   /* Minimise vertical footprint; keep tap target >= 36px */
-  .add-footer .new-btn { display:flex; align-items:center; justify-content:center; gap:.4rem; color: var(--clr-text-2); height: 100% !important; min-height: 100%; cursor: pointer; font-size: 0.95rem; }
-  .add-footer .new-btn:hover { background: color-mix(in oklab, var(--clr-elev) 90%, black 0%); color: var(--clr-text); border-radius: 8px; }
+  .add-footer .new-btn, .list-footer .new-btn { display:flex; align-items:center; justify-content:center; gap:.4rem; color: var(--clr-text-2); height: 100% !important; min-height: 100%; cursor: pointer; font-size: 0.95rem; }
+  .add-footer .new-btn:hover, .list-footer .new-btn:hover { background: color-mix(in oklab, var(--clr-elev) 90%, black 0%); color: var(--clr-text); border-radius: 8px; }
   /* Ensure inner button fills the footer height variable */
-  .add-footer { height: var(--footer-h); }
+  .add-footer { height: var(--list-footer-h); }
   .add-footer .new-btn { min-height: 100%; height: 100%; }
 
   /* Bottom nav: icon with optional label (no hover jump) */
@@ -199,17 +202,6 @@ input[type="checkbox"]:disabled { opacity: .6; cursor: default; }
 .scrollbar-left > * { direction: ltr; }
   /* vertical list snap to avoid half-visible last row */
   .vlist { scroll-snap-type: y mandatory; }
-  /* Make the scrollable list height an integer multiple of row height.
-     Row = 40px, bottom padding = 8px (pb-2). We add top/bottom inset with padding.
-     Using CSS var fallback so it adapts to container height. */
-  .list-card { --pad-bottom: 0px; }
-  /* footer height drives available list height; JS sets --rows */
-  .add-footer { --footer-h: 36px; height: var(--footer-h); }
-  .list-card { --rows: 0; }
-  .list-card .list-scroll { box-sizing: content-box; padding-bottom: 0 !important; margin: 0; height: auto; overflow-y: scroll; }
-  .list-card .list-scroll > :last-child { margin-bottom: 0 !important; }
+  /* legacy layout rules removed: list height and footer height now driven by grid + JS row-fit */
   .end-spacer { height: 8px; }
-  .footer-spacer { height: var(--footer-h); }
-  /* Tiny padding only at very end of scroll content */
-  .endpad::after { content: ""; display: block; height: 6px; }
   .snap-start { scroll-snap-align: start; }

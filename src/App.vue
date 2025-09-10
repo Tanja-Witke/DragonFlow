@@ -72,11 +72,11 @@
                 <div
                   v-for="list in lists"
                   :key="list.id"
-                  class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col list-card"
+                  class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col list-card list-element"
                   :class="cardWidth"
                 >
               <!-- header -->
-              <div class="flex items-center justify-between mb-2">
+              <div class="list-header flex items-center justify-between mb-2">
                 <h2 class="font-semibold truncate">{{ list.title }}</h2>
                 <div class="relative">
                   <button class="btn-ghost" @click="toggleListActions(list.id)" aria-label="List actions">
@@ -95,7 +95,7 @@
               <!-- tasks area container (fills available height) -->
               <div class="task-area overflow-hidden">
               <!-- tasks (active only) -->
-              <ul class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll endpad">
+              <ul class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll" @scroll="onListScrollDeferred($event)">
                 <li
                   v-for="t in list.tasks"
                   :key="t.id"
@@ -126,13 +126,11 @@
                   <span v-for="n in 10" :key="'ray-'+t.id+'-'+n" class="ray" :style="rayStyle(n)"></span>
                 </div>
                 </li>
-                <!-- spacer matching footer height to align end exactly -->
-                <li class="footer-spacer" aria-hidden="true"></li>
               </ul>
               </div>
 
-              <!-- add footer: pinned to bottom of list card, always visible -->
-              <div :id="'add-anchor-'+list.id" class="add-footer group px-2" @click="toggleAddMenu(list.id)">
+              <!-- list footer: pinned to bottom of list element, always visible -->
+              <div :id="'add-anchor-'+list.id" class="add-footer list-footer group px-2" @click="toggleAddMenu(list.id)">
                 <div class="new-btn w-full">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                   <span>New</span>
@@ -450,39 +448,61 @@ export default {
   methods: {
     updateListHeights(){
       try {
-        const cards = document.querySelectorAll('.list-card');
+        const cards = document.querySelectorAll('.list-element, .list-card');
+        const dpr = window.devicePixelRatio || 1;
         cards.forEach(card => {
-          const style = getComputedStyle(card);
-          // Prefer precise task item height (includes padding). Fallback to CSS var.
-          let rowPrecise = parseFloat(style.getPropertyValue('--row')) || 40;
-          const firstItem = card.querySelector('.list-scroll .task-item');
-          if (firstItem) {
-            const rh = firstItem.getBoundingClientRect().height; // float with sub-pixel
-            if (rh && !Number.isNaN(rh)) rowPrecise = rh;
-          }
+          const root = document.documentElement;
+          const rowNom = parseFloat(getComputedStyle(root).getPropertyValue('--row-nominal')) || 40;
 
-          const footerEl = card.querySelector('.add-footer');
+          const headerEl = card.querySelector('.list-header');
+          const footerEl = card.querySelector('.list-footer') || card.querySelector('.add-footer');
           const listEl = card.querySelector('.list-scroll');
           if (!listEl) return;
 
           const cardH = card.getBoundingClientRect().height;
-          const footerH = footerEl ? (parseFloat(getComputedStyle(footerEl).getPropertyValue('--footer-h')) || footerEl.offsetHeight || 0) : 0;
+          const cs = getComputedStyle(card);
+          const padTop = parseFloat(cs.paddingTop) || 0;
+          const padBottom = parseFloat(cs.paddingBottom) || 0;
+          const headerH = headerEl ? headerEl.getBoundingClientRect().height : 0;
+          const headerMB = headerEl ? (parseFloat(getComputedStyle(headerEl).marginBottom) || 0) : 0;
+          const footerH = footerEl ? (footerEl.getBoundingClientRect().height || 0) : 0;
 
-          // Use whole card as reference; subtract only fixed footer height
-          const available = Math.max(0, cardH - footerH);
-          const rows = Math.max(0, Math.floor(available / rowPrecise));
-          let listHeightPx = rows * rowPrecise;
-
-          // Device-pixel safe compensation to eliminate tiny gap without clipping
-          const diff = available - listHeightPx; // remaining space
-          if (diff > 0 && diff <= 2) {
-            listHeightPx = Math.ceil(listHeightPx + 1); // nudge by 1px
-          } else {
-            listHeightPx = Math.ceil(listHeightPx);
-          }
-
+          // 1) Set the scroll area height exactly to the remaining space
+          const available = Math.max(0, cardH - padTop - padBottom - headerH - headerMB - footerH);
+          const listHeightPx = Math.max(0, Math.floor(available * dpr) / dpr);
           listEl.style.height = listHeightPx + 'px';
+
+          // 2) Base row height strictly on the scroll element height (measured)
+          const measuredH = listEl.getBoundingClientRect().height || listHeightPx;
+          const rows = Math.max(1, Math.floor(measuredH / rowNom));
+          let rowFit = rows > 0 ? (measuredH / rows) : measuredH;
+          rowFit = Math.max(1, Math.round(rowFit * dpr)) / dpr; // snap to pixel grid
+          card.style.setProperty('--row-fit', rowFit + 'px');
         });
+      } catch {}
+    },
+    onListScrollDeferred(e){
+      try {
+        const el = e.target;
+        if (el._snapTimer) clearTimeout(el._snapTimer);
+        el._snapTimer = setTimeout(() => {
+          try {
+            const card = el.closest('.list-element') || el.closest('.list-card');
+            if (!card) return;
+            const dpr = window.devicePixelRatio || 1;
+            const rowFit = parseFloat(getComputedStyle(card).getPropertyValue('--row-fit')) ||
+                           parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row-nominal')) || 40;
+            if (!rowFit) return;
+            const max = Math.max(0, el.scrollHeight - el.clientHeight);
+            const st = Math.min(Math.max(0, el.scrollTop), max);
+            const steps = Math.round(st / rowFit);
+            let target = steps * rowFit;
+            target = Math.round(target * dpr) / dpr;
+            if (Math.abs(target - st) > 0.5) {
+              el.scrollTo({ top: target, behavior: 'auto' });
+            }
+          } catch {}
+        }, 120);
       } catch {}
     },
     handleGlobalClick(e){

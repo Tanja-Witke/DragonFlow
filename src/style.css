@@ -9,13 +9,13 @@
   --clr-elev: #222A33;        /* Elevated */
   --clr-border: #2C3540;      /* Border/Divider */
   --clr-text: #E9EEF2;        /* Text Primary */
-  --clr-text-2: #A9B4BF;      /* Text Secondary */
+  --clr-text-2: #C6D0DA;      /* Text Secondary (brighter) */
   --clr-muted: #86939F;       /* Muted */
 
   /* brand & accents */
-  --clr-primary: #3FAE9C;     /* Calm Teal */
-  --clr-accent: #CFA86A;      /* Warm Sand */
-  --clr-accent-2: #B8695A;    /* Terracotta */
+  --clr-primary: #8AD5C7;     /* Glassy Teal */
+  --clr-accent: #9CC8FF;      /* Ice Blue */
+  --clr-accent-2: #D48C7E;    /* Soft Coral */
 
   /* semantic */
   --clr-success: #58B487;
@@ -30,21 +30,35 @@
   --row-nominal: clamp(36px, 5vh, 64px);
   --list-header-h: clamp(36px, 4.5vh, 64px);
   --list-footer-h: clamp(54px, 6vh, 84px);
+
+  /* frosted glass settings */
+  --frost-blur: 14px;
+  --frost-sat: 1.15;
+  --alpha-bar: 18%;   /* header/footer transparency */
+  --alpha-rail: 58%;  /* side rail opacity (darker than cards) */
+  --alpha-card: 42%;  /* main cards opacity (higher = more opaque) */
+  --alpha-elev: 62%;  /* elevated tiles opacity */
+  --tone-medium: #2A2F37; /* medium tone, updated from image */
+  --frost-border: color-mix(in oklab, white 10%, transparent);
+  --app-bg-image: url('../images/image-background.jpg');
+  /* derived dynamic accent (set at runtime), with a safe default */
+  --accent-bright: #9EE7DB;
 }
 
 /* Helper palette classes */
 @layer components {
-  .app-bg      { background: var(--clr-bg); color: var(--clr-text); }
-  .side-rail   { background: color-mix(in oklab, var(--clr-card) 60%, black 40%); border-color: var(--clr-border); }
-  .surface     { background: var(--clr-card); }
-  .elev        { background: var(--clr-elev); }
+  .app-bg      { background-color: var(--clr-bg); background-image: var(--app-bg-image); background-size: cover; background-position: center; background-attachment: fixed; color: var(--clr-text); }
+  /* Side rail: darker than cards, frosted and slightly transparent */
+  .side-rail   { background: color-mix(in oklab, var(--clr-card) 78%, black 6%); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border-color: var(--frost-border); }
+  .surface     { background: color-mix(in oklab, var(--clr-card) var(--alpha-card), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: none; color: var(--clr-text); }
+  .elev        { background: color-mix(in oklab, var(--clr-elev) var(--alpha-elev), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: none; color: var(--clr-text); }
   .border-div  { border-color: var(--clr-border); }
   .text-main   { color: var(--clr-text); }
   .text-sec    { color: var(--clr-text-2); }
   .text-muted  { color: var(--clr-muted); }
   .text-primary{ color: var(--clr-primary); }
-  .bg-surface  { background: var(--clr-surface); }
-  .bg-elev     { background: var(--clr-elev); }
+  .bg-surface  { background: color-mix(in oklab, var(--clr-surface) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
+  .bg-elev     { background: color-mix(in oklab, var(--clr-elev) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
   .is-active   { background: color-mix(in oklab, var(--clr-elev) 85%, black 0%); color: var(--clr-text); }
 
   .btn-primary { @apply px-3 py-1.5 rounded-lg text-white shadow transition; background: var(--clr-primary); }
@@ -58,7 +72,7 @@
   .btn-outline:focus-visible { box-shadow: 0 0 0 2px var(--clr-focus); }
   /* selected toggle state (e.g., Task/Flow in add menu) */
   .btn-outline.is-active {
-    background: color-mix(in oklab, var(--clr-primary) 28%, var(--clr-surface) 72%);
+    background: var(--interactive-hover);
     color: var(--clr-text);
   }
 
@@ -68,16 +82,25 @@
 
   .field       { @apply w-full rounded px-2 py-1 outline-none; background: var(--clr-surface); color: var(--clr-text); }
 
-  .menu-pop    { @apply absolute z-10 mt-1 w-44 rounded-xl shadow-xl p-1; right: 0; background: var(--clr-elev); }
+  .menu-pop    { @apply absolute z-10 w-44 rounded-xl shadow-xl p-1; right: 0; background: var(--tone-medium); color: var(--clr-text); border: none; overflow: hidden; position: absolute; }
+  /* Make inner button hovers bleed to the rounded edges */
+  .menu-pop { padding: 0; }
+  .menu-pop .menu-item { width: 100%; display: block; }
+  .menu-pop.down { top: calc(100% + 6px); }
+  .menu-pop.up   { bottom: calc(100% + 6px); }
   .menu-pop.right { right: 0; }
   .menu-pop.left { left: 0; right: auto; }
-  .menu-item   { @apply w-full text-left px-3 py-2 rounded; color: var(--clr-text-2); }
+  .menu-item   { @apply w-full text-left px-3 py-2; display:block; border-radius: 0; color: var(--clr-text-2); }
   .menu-item { cursor: pointer; }
-  .menu-item:hover { background: color-mix(in oklab, var(--clr-elev) 88%, black 0%); color: var(--clr-text); }
+  .menu-item:hover { background: var(--interactive-hover); color: var(--clr-text); }
+  .side-rail .menu-item:hover { background: color-mix(in oklab, var(--accent-bright) 60%, transparent); color: var(--clr-text); }
   .menu-item.danger { color: var(--clr-danger); }
-  .menu-item.danger:hover { background: color-mix(in oklab, var(--clr-elev) 85%, black 0%); color: var(--clr-danger); }
+  .menu-item.danger:hover {
+    background: color-mix(in oklab, var(--clr-danger) 28%, var(--tone-medium) 72%);
+    color: color-mix(in oklab, var(--clr-danger) 92%, white 8%);
+  }
 
-  .menu-fab    { @apply rounded-xl shadow-2xl p-2; background: var(--clr-elev); box-shadow: var(--shadow); width: auto; min-width: 12rem; max-width: min(90vw, 22rem); }
+  .menu-fab    { @apply rounded-xl shadow-2xl p-2; background: var(--tone-medium); color: var(--clr-text); box-shadow: var(--shadow); width: auto; min-width: 12rem; max-width: min(90vw, 22rem); border: none; }
   /* Make full-width menus align with card inner gutters (~8px each side) */
   /* Align full-width menus with ticket (task) content, not card edge */
   .menu-fab.full { width: calc(100% - 22px); min-width: 0; max-width: none; border-top-left-radius: 12px; border-top-right-radius: 12px; margin: 0 11px; }
@@ -99,21 +122,27 @@
 
   /* Task variants */
 .task-item { @apply rounded-lg transition; position: relative; padding-right: 4px; height: var(--row-fit, var(--row-nominal)); margin: 0 !important; box-sizing: border-box; }
-  .task-item:hover { background: color-mix(in oklab, var(--clr-elev) 92%, black 0%); }
-  .flow-task { position: relative; background: color-mix(in oklab, var(--clr-elev) 96%, black 0%); }
-  .flow-task::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 4px; background: var(--clr-primary); border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+  :root { --interactive-hover: color-mix(in oklab, var(--clr-primary) 40%, transparent); }
+  .task-item:hover { background: var(--interactive-hover); }
+  /* Flow tasks look like normal tasks; highlight the checkbox instead */
+  .flow-task { position: relative; background: transparent; }
+  .flow-task::after { display: none; }
+  /* Subtle professional accent: thin border on checkbox with soft glow on hover */
+  .flow-task input[type="checkbox"] { border: 1.5px solid color-mix(in oklab, var(--clr-primary) 80%, transparent); background: color-mix(in oklab, var(--clr-surface) 92%, transparent); }
+  .flow-task input[type="checkbox"]:hover { box-shadow: 0 0 8px color-mix(in oklab, var(--clr-primary) 30%, transparent); }
+  .flow-task input[type="checkbox"]:checked { background: var(--clr-primary); border-color: var(--clr-primary); box-shadow: 0 0 8px color-mix(in oklab, var(--clr-primary) 30%, transparent); }
   .task-item.completing { animation: taskPop 180ms ease-out, taskFade 300ms ease-in 120ms forwards; }
 
   @keyframes taskPop {
     0% { transform: scale(1); }
-    50% { transform: scale(1.03); background: color-mix(in oklab, var(--clr-success) 18%, var(--clr-elev) 82%); }
+    50% { transform: scale(1.03); background: color-mix(in oklab, var(--accent-bright) 22%, var(--clr-elev) 78%); }
     100% { transform: scale(1); }
   }
   @keyframes taskFade { to { opacity: 0; transform: translateX(12px); } }
 
   /* Celebration overlay (local, subtle — line rays, no circles) */
   .celebrate-overlay { position: absolute; inset: 0; pointer-events: none; }
-  .ray { position:absolute; top:50%; left:50%; width:2px; height:10px; background: var(--clr-success); border-radius:1px; transform-origin: center; transform: translate(-50%,-50%) rotate(var(--rot)); animation: rayFly 520ms ease-out forwards; }
+  .ray { position:absolute; top:50%; left:50%; width:2px; height:10px; background: var(--accent-bright); border-radius:1px; transform-origin: center; transform: translate(-50%,-50%) rotate(var(--rot)); animation: rayFly 520ms ease-out forwards; }
   @keyframes rayFly {
     from { opacity:.9; transform: translate(-50%,-50%) rotate(var(--rot)) scaleY(1); }
     to   { opacity:0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)) scaleY(1.1); }
@@ -126,18 +155,18 @@
   .add-line:hover { color: var(--clr-text); }
 
   /* Add tiles (muted full-card) */
-  .muted-tile { background: color-mix(in oklab, var(--clr-surface) 95%, black 5%); color: var(--clr-text-2); }
-  .muted-tile:hover { background: color-mix(in oklab, var(--clr-surface) 90%, black 10%); color: var(--clr-text); }
+  .muted-tile { background: color-mix(in oklab, var(--clr-surface) var(--alpha-bar), transparent); color: var(--clr-text); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: none; cursor: pointer; }
+  .muted-tile:hover { background: color-mix(in oklab, var(--clr-surface) calc(var(--alpha-bar) + 6%), transparent); color: var(--clr-text); }
 
   /* Add footer: pinned bottom region of list card */
   /* Footer covers entire bottom of card with same corners */
   /* List card as grid: tasks area + footer */
   .list-card { position: relative; overflow: hidden; }
-  .list-element { position: relative; overflow: hidden; display: grid; grid-template-rows: var(--list-header-h) 1fr var(--list-footer-h); }
+  .list-element { position: relative; overflow: hidden; display: grid; grid-template-rows: var(--list-header-h) 1fr var(--list-footer-h); isolation: isolate; }
   .list-header { height: var(--list-header-h); }
   .task-area { min-height: 0; }
-  .add-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: var(--clr-card); border-top: none; box-shadow: none; padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; height: var(--list-footer-h); }
-  .list-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: var(--clr-card); border-top: none; box-shadow: none; padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; height: var(--list-footer-h); }
+.add-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: color-mix(in oklab, var(--clr-card) var(--alpha-card), transparent); border-top: none; box-shadow: none; padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; height: var(--list-footer-h); display:flex; align-items:center; justify-content:center; cursor: pointer; }
+  .list-footer { position: absolute; left: 50%; transform: translateX(-50%); width: calc(100% + 24px); bottom: 0; z-index: 5; background: color-mix(in oklab, var(--clr-card) var(--alpha-card), transparent); border-top: none; box-shadow: none; padding: 0; margin: 0; margin-top: 0; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; height: var(--list-footer-h); color: var(--clr-text); display:flex; align-items:center; justify-content:center; cursor: pointer; }
   /* Kill any bottom gap by removing bottom border radius and overflow */
   .list-card { border-bottom-left-radius: 0; border-bottom-right-radius: 0; overflow: hidden; }
   .list-element .list-footer { border-bottom: 0; }
@@ -146,17 +175,25 @@
   .list-card { margin-bottom: 0; }
   .list-element .list-scroll { margin-bottom: 0 !important; height: 100%; overflow-y: scroll; }
   .vlist > :last-child { margin-bottom: 0 !important; }
-  /* Minimise vertical footprint; keep tap target >= 36px */
-  .add-footer .new-btn, .list-footer .new-btn { display:flex; align-items:center; justify-content:center; gap:.4rem; color: var(--clr-text-2); height: 100% !important; min-height: 100%; cursor: pointer; font-size: 0.95rem; }
-  .add-footer .new-btn:hover, .list-footer .new-btn:hover { background: color-mix(in oklab, var(--clr-elev) 90%, black 0%); color: var(--clr-text); border-radius: 8px; }
+  /* Full-width hover highlight contained to footer */
+  .add-footer .new-btn, .list-footer .new-btn {
+    display:flex; align-items:center; justify-content:center; gap:.4rem;
+    color: var(--clr-text); width: 100%; height: 100%; cursor: pointer; font-size: 0.95rem;
+    background: transparent; border-radius: inherit; padding: 0;
+  }
+  .add-footer .new-btn:hover, .list-footer .new-btn:hover { background: var(--interactive-hover); }
+  /* apply hover on the footer container to avoid flicker when moving over inner elements */
+/* ensure footer remains positioned without hover overlays */
+.add-footer, .list-footer { position: absolute; }
   /* Ensure inner button fills the footer height variable */
   .add-footer { height: var(--list-footer-h); }
-  .add-footer .new-btn { min-height: 100%; height: 100%; }
+  .add-footer .new-btn { min-height: 100%; height: 100%; width: 100%; }
 
   /* Bottom nav: icon with optional label (no hover jump) */
-  .nav-btn { display: inline-flex; align-items: center; gap: .5rem; color: var(--clr-text-2); }
+  .nav-btn { display: inline-flex; align-items: center; gap: .5rem; color: color-mix(in oklab, white 70%, var(--clr-text) 30%); }
+  .nav-btn:not(.active) { cursor: pointer; }
   .nav-label { opacity: 0; width: 0; max-width: 0; overflow: hidden; white-space: nowrap; transition: all .15s ease; }
-  .nav-btn.active { color: var(--clr-primary); }
+  .nav-btn.active { color: color-mix(in oklab, var(--accent-bright) 70%, white 50%); }
   .nav-btn.active .nav-label { opacity: 1; width: auto; max-width: 12rem; }
 
   /* Modern FAB hover */
@@ -169,17 +206,16 @@ input[type="checkbox"] {
   appearance: none;
   width: 18px; height: 18px;
   border-radius: 6px;
-  background: color-mix(in oklab, var(--clr-surface) 95%, black 5%);
+  background: color-mix(in oklab, var(--clr-surface) 96%, white 4%);
   border: none;
   display: inline-grid; place-content: center;
   cursor: pointer;
 }
 input[type="checkbox"]:hover {
-  background: color-mix(in oklab, var(--clr-surface) 90%, black 10%);
+  background: color-mix(in oklab, var(--clr-surface) 92%, white 8%);
 }
 input[type="checkbox"]:checked {
   background: var(--clr-primary);
-  border-color: var(--clr-primary);
 }
 input[type="checkbox"]:checked::after {
   content: '';
@@ -192,9 +228,9 @@ input[type="checkbox"]:focus-visible { outline: none; box-shadow: none; }
 input[type="checkbox"]:disabled { opacity: .6; cursor: default; }
 
 /* subdued, thinner scrollbars */
-* { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--clr-border) 80%, black 20%) transparent; }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--clr-text) 35%, transparent) transparent; }
 ::-webkit-scrollbar { height: 6px; width: 6px; }
-::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--clr-border) 80%, black 20%); border-radius: 9999px; }
+::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--clr-text) 35%, transparent); border-radius: 9999px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* place scrollbar on the left side for specific containers */
@@ -205,3 +241,11 @@ input[type="checkbox"]:disabled { opacity: .6; cursor: default; }
   /* legacy layout rules removed: list height and footer height now driven by grid + JS row-fit */
   .end-spacer { height: 8px; }
   .snap-start { scroll-snap-align: start; }
+  /* Remove hover background where explicitly marked */
+  .no-hover:hover { background: transparent !important; }
+  /* Anchor add menu above footer within each card */
+  .menu-up { position: absolute; left: 0; right: 0; bottom: calc(var(--list-footer-h)); z-index: 90; }
+  /* Footer hover overlay to avoid flicker */
+  .add-footer::after, .list-footer::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--interactive-hover); opacity: 0; transition: opacity .12s ease; pointer-events: none; z-index: 0; }
+  .add-footer:hover::after, .list-footer:hover::after { opacity: 1; }
+  .add-footer .new-btn, .list-footer .new-btn { position: relative; z-index: 1; }

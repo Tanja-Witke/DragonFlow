@@ -13,7 +13,7 @@
             <div class="flex items-center gap-2 font-semibold">
               <span class="hidden md:inline">ToDojo</span>
             </div>
-            <button class="btn-ghost md:hidden" @click="closeSide" aria-label="Close menu">
+            <button class="btn-ghost no-hover md:hidden" @click.stop="closeSide" aria-label="Close menu">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6l-12 12"/></svg>
             </button>
           </div>
@@ -43,11 +43,11 @@
         <!-- TOP BAR -->
         <div class="flex items-center justify-between px-3 py-2 bg-surface">
           <div class="flex items-center gap-2">
-            <button class="btn-ghost md:hidden" @click="ui.sideOpen = true" aria-label="Open menu">
+            <button class="btn-ghost no-hover md:hidden" @click.stop="ui.sideOpen = true" aria-label="Open menu">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
             </button>
             <!-- Desktop side toggle on the left -->
-            <button class="btn-ghost hidden md:inline-flex" @click="toggleSideMd" title="Toggle menu" aria-label="Toggle side menu">
+            <button class="btn-ghost no-hover hidden md:inline-flex" @click.stop="toggleSideMd" title="Toggle menu" aria-label="Toggle side menu">
               <svg v-if="ui.sideOpen" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
               <svg v-else class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
             </button>
@@ -75,19 +75,27 @@
                   class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col list-card list-element"
                   :class="cardWidth"
                 >
-              <!-- header -->
+              <!-- header (ellipsis opens actions) -->
               <div class="list-header flex items-center justify-between mb-2">
-                <h2 class="font-semibold truncate">{{ list.title }}</h2>
+                <h2 class="font-semibold truncate ml-2 md:ml-3">{{ list.title }}</h2>
                 <div class="relative">
-                  <button class="btn-ghost" @click="toggleListActions(list.id)" aria-label="List actions">
+                  <button class="btn-ghost no-hover" @click.stop="toggleListActions(list.id, $event)" aria-label="List actions">
                     <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                   </button>
                   <div
                     v-if="ui.listActionsId===list.id"
+                    :id="'menu-list-'+list.id"
                     class="menu-pop right"
+                    :class="ui.menuDir['list-'+list.id] === 'up' ? 'up' : 'down'"
                   >
-                    <button class="menu-item" @click="renameList(list)">Edit</button>
-                    <button class="menu-item danger" @click="removeList(list.id)">Delete</button>
+                    <template v-if="ui.menuDir['list-'+list.id] === 'up'">
+                      <button class="menu-item danger" @click="removeList(list.id)">Delete</button>
+                      <button class="menu-item" @click="renameList(list)">Edit</button>
+                    </template>
+                    <template v-else>
+                      <button class="menu-item" @click="renameList(list)">Edit</button>
+                      <button class="menu-item danger" @click="removeList(list.id)">Delete</button>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -99,27 +107,29 @@
                 <li
                   v-for="t in list.tasks"
                   :key="t.id"
-                  class="group relative flex items-center gap-2 px-2 py-1 task-item snap-start"
+                  class="group relative flex items-center gap-2 px-2 py-1 task-item snap-start cursor-pointer"
                   :class="[ t.fromFlowId ? 'flow-task' : '', ui.completing[t.id] ? 'completing' : '' ]"
+                  @click.stop="openTaskMenu(list, t, $event)"
                 >
-                  <!-- actions menu on the left -->
-                  <div class="relative order-1 w-7 shrink-0 flex justify-center" style="margin-left:-8px">
-                    <button class="btn-ghost" @click="toggleTaskActions(t.id)" aria-label="Task actions">
-                      <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                    </button>
-                    <div v-if="ui.taskActionsId===t.id" class="menu-pop left">
-                      <button class="menu-item" @click="editTask(list, t)">Edit</button>
-                      <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
-                    </div>
-                  </div>
+                  
 
                   <!-- title in the middle -->
-                  <button class="flex-1 order-2 text-left leading-tight truncate" @click="toggleTaskActions(t.id)">
-                    {{ t.title }}
-                  </button>
+                  <span class="flex-1 order-2 text-left leading-tight truncate">{{ t.title }}</span>
 
                   <!-- checkbox on the right -->
-                  <input class="order-3" type="checkbox" :checked="false" :disabled="ui.completing[t.id]" @change="completeTask(list, t, $event)" />
+                  <input class="order-3" type="checkbox" :checked="false" :disabled="ui.completing[t.id]" @click.stop @change="completeTask(list, t, $event)" />
+
+                  <!-- task row actions menu (opens on row click) -->
+                  <div v-if="ui.taskActionsId===t.id" :id="'menu-task-'+t.id" class="menu-pop right" :class="ui.menuDir['task-'+t.id] === 'up' ? 'up' : 'down'">
+                    <template v-if="ui.menuDir['task-'+t.id] === 'up'">
+                      <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
+                      <button class="menu-item" @click="editTask(list, t)">Edit</button>
+                    </template>
+                    <template v-else>
+                      <button class="menu-item" @click="editTask(list, t)">Edit</button>
+                      <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
+                    </template>
+                  </div>
 
                 <!-- celebration overlay at task level -->
                 <div v-if="ui.celebrateTaskId===t.id" class="celebrate-overlay">
@@ -131,7 +141,7 @@
 
               <!-- list footer: pinned to bottom of list element, always visible -->
               <div :id="'add-anchor-'+list.id" class="add-footer list-footer group px-2" @click="toggleAddMenu(list.id)">
-                <div class="new-btn w-full">
+                <div class="new-btn">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                   <span>New</span>
                 </div>
@@ -143,21 +153,23 @@
                 class="menu-fab full menu-up space-y-2"
                 @click.stop
               >
-                  <div class="flex gap-2 px-1">
-                    <button class="btn-outline flex-1" :class="ui.addMode==='task' ? 'is-active' : ''" @click.stop="setAddMode('task')">Task</button>
-                    <button class="btn-outline flex-1" :class="ui.addMode==='flow' ? 'is-active' : ''" @click.stop="setAddMode('flow')">Flow</button>
-                  </div>
 
                   <div v-if="ui.addMode==='task'" class="space-y-2">
                     <label class="block text-xs text-sec px-2">Task Title</label>
                     <input
                       v-model.trim="ui.newTaskTitle"
-                      class="field"
+                      :class="['field', ((ui.newTaskTitle||'').trim()===ui.placeholderSample) ? 'placeholder-active' : '']"
                       @focus="onTaskTitleFocus"
                       @blur="onTaskTitleBlur"
                     />
-                    <div class="flex justify-end gap-2">
-                      <button class="btn-primary" :disabled="!ui.newTaskTitle" @click.stop="addTaskWithTitle(list)">Add Task</button>
+                    <div class="flex items-center justify-between gap-2 px-1">
+                      <div class="flex gap-2">
+                        <button class="btn-outline" :class="ui.addMode==='task' ? 'is-active' : ''" @click.stop="setAddMode('task')">Task</button>
+                        <button class="btn-outline" :class="ui.addMode==='flow' ? 'is-active' : ''" @click.stop="setAddMode('flow')">Flow</button>
+                      </div>
+                      <div class="flex gap-2">
+                        <button class="btn-primary" :disabled="!ui.newTaskTitle" @click.stop="addTaskWithTitle(list)">Add Task</button>
+                      </div>
                     </div>
                   </div>
 
@@ -167,8 +179,14 @@
                       <option disabled value="">Choose a flow…</option>
                       <option v-for="f in flows" :key="f.id" :value="f.id">{{ f.title }}</option>
                     </select>
-                    <div class="flex justify-end gap-2">
-                      <button class="btn-primary" :disabled="!ui.selectedFlowId" @click.stop="addFlowToList(list, ui.selectedFlowId)">Add Flow</button>
+                    <div class="flex items-center justify-between gap-2 px-1">
+                      <div class="flex gap-2">
+                        <button class="btn-outline" :class="ui.addMode==='task' ? 'is-active' : ''" @click.stop="setAddMode('task')">Task</button>
+                        <button class="btn-outline" :class="ui.addMode==='flow' ? 'is-active' : ''" @click.stop="setAddMode('flow')">Flow</button>
+                      </div>
+                      <div class="flex gap-2">
+                        <button class="btn-primary" :disabled="!ui.selectedFlowId" @click.stop="addFlowToList(list, ui.selectedFlowId)">Add Flow</button>
+                      </div>
                     </div>
               </div>
             </div>
@@ -207,12 +225,18 @@
                   <div class="flex items-center justify-between mb-2">
                     <h2 class="font-semibold truncate">{{ flow.title }}</h2>
                     <div class="relative">
-                      <button class="btn-ghost" @click="toggleFlowActions(flow.id)" aria-label="Flow actions">
+                      <button class="btn-ghost no-hover" @click.stop="toggleFlowActions(flow.id, $event)" aria-label="Flow actions">
                         <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                       </button>
-                      <div v-if="ui.flowActionsId===flow.id" class="menu-pop right">
-                        <button class="menu-item" @click="renameFlow(flow)">Edit</button>
-                        <button class="menu-item danger" @click="removeFlow(flow.id)">Delete</button>
+                      <div v-if="ui.flowActionsId===flow.id" :id="'menu-flow-'+flow.id" class="menu-pop right" :class="ui.menuDir['flow-'+flow.id] === 'up' ? 'up' : 'down'">
+                        <template v-if="ui.menuDir['flow-'+flow.id] === 'up'">
+                          <button class="menu-item danger" @click="removeFlow(flow.id)">Delete</button>
+                          <button class="menu-item" @click="renameFlow(flow)">Edit</button>
+                        </template>
+                        <template v-else>
+                          <button class="menu-item" @click="renameFlow(flow)">Edit</button>
+                          <button class="menu-item danger" @click="removeFlow(flow.id)">Delete</button>
+                        </template>
                       </div>
                     </div>
                   </div>
@@ -223,12 +247,18 @@
                       <div class="flex items-center justify-between mb-2">
                         <div class="text-xs text-sec">Step {{ idx+1 }} — type: single</div>
                         <div class="relative">
-                          <button class="btn-ghost" @click="toggleStepActions(step.id)" aria-label="Step actions">
+                          <button class="btn-ghost no-hover" @click.stop="toggleStepActions(step.id, $event)" aria-label="Step actions">
                             <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                           </button>
-                          <div v-if="ui.stepActionsId===step.id" class="menu-pop right">
-                            <button class="menu-item" @click="renameStep(step)">Edit</button>
-                            <button class="menu-item danger" @click="deleteStep(flow, step.id)">Delete</button>
+                          <div v-if="ui.stepActionsId===step.id" :id="'menu-step-'+step.id" class="menu-pop right" :class="ui.menuDir['step-'+step.id] === 'up' ? 'up' : 'down'">
+                            <template v-if="ui.menuDir['step-'+step.id] === 'up'">
+                              <button class="menu-item danger" @click="deleteStep(flow, step.id)">Delete</button>
+                              <button class="menu-item" @click="renameStep(step)">Edit</button>
+                            </template>
+                            <template v-else>
+                              <button class="menu-item" @click="renameStep(step)">Edit</button>
+                              <button class="menu-item danger" @click="deleteStep(flow, step.id)">Delete</button>
+                            </template>
                           </div>
                         </div>
                       </div>
@@ -243,12 +273,18 @@
                         <span class="flex-1 px-2 py-1 border border-div rounded">{{ step.taskTitle }}</span>
                         <!-- task actions in step -->
                         <div class="relative">
-                          <button class="btn-ghost" @click="toggleStepTaskActions(step.id)" aria-label="Step task actions">
+                          <button class="btn-ghost no-hover" @click.stop="toggleStepTaskActions(step.id, $event)" aria-label="Step task actions">
                             <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                           </button>
-                          <div v-if="ui.stepTaskActionsId===step.id" class="menu-pop right">
-                            <button class="menu-item" @click="renameStepTask(step)">Edit</button>
-                            <button class="menu-item danger" @click="removeStepTask(step)">Delete</button>
+                          <div v-if="ui.stepTaskActionsId===step.id" :id="'menu-steptask-'+step.id" class="menu-pop right" :class="ui.menuDir['steptask-'+step.id] === 'up' ? 'up' : 'down'">
+                            <template v-if="ui.menuDir['steptask-'+step.id] === 'up'">
+                              <button class="menu-item danger" @click="removeStepTask(step)">Delete</button>
+                              <button class="menu-item" @click="renameStepTask(step)">Edit</button>
+                            </template>
+                            <template v-else>
+                              <button class="menu-item" @click="renameStepTask(step)">Edit</button>
+                              <button class="menu-item danger" @click="removeStepTask(step)">Delete</button>
+                            </template>
                           </div>
                         </div>
                       </div>
@@ -362,6 +398,7 @@ export default {
         selectedFlowId: '',
         addMode: 'task',
         newTaskTitle: '',
+        placeholderSample: '',
         completing: {},
         celebrateTaskId: null,
         // action menus
@@ -370,6 +407,7 @@ export default {
         stepActionsId: null,
         stepTaskActionsId: null,
         taskActionsId: null,
+        menuDir: {},
       }
     };
   },
@@ -431,7 +469,37 @@ export default {
       this.updateListHeights();
       window.addEventListener('resize', this.updateListHeights, { passive: true });
       window.addEventListener('click', this.handleGlobalClick, { passive: true });
+      this.updateAccentFromBackground();
+      // Recalculate accent when viewport or background changes (more targeted to avoid flicker)
+      const deb = (fn)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),180); }; };
+      this._accentDebounced = deb(this.updateAccentFromBackground);
+      window.addEventListener('orientationchange', this._accentDebounced, { passive: true });
+      const appBg = document.querySelector('.app-bg');
+      if (appBg && window.MutationObserver) {
+        this._accentObserver = new MutationObserver(this._accentDebounced);
+        this._accentObserver.observe(appBg, { attributes: true, attributeFilter: ['style'] });
+      }
+      // Lightweight polling as a fallback only every 5s
+      try {
+        this._accentPrevImage = getComputedStyle(appBg||document.body).backgroundImage;
+        this._accentPoll = setInterval(() => {
+          try {
+            const cur = getComputedStyle(appBg||document.body).backgroundImage;
+            if (cur !== this._accentPrevImage) { this._accentPrevImage = cur; this._accentDebounced(); }
+          } catch {}
+        }, 5000);
+      } catch {}
     });
+  },
+  beforeDestroy(){
+    window.removeEventListener('resize', this.updateListHeights);
+    window.removeEventListener('click', this.handleGlobalClick);
+    if (this._accentDebounced) {
+      window.removeEventListener('resize', this._accentDebounced);
+      window.removeEventListener('orientationchange', this._accentDebounced);
+    }
+    if (this._accentObserver) { try { this._accentObserver.disconnect(); } catch {} }
+    if (this._accentPoll) { try { clearInterval(this._accentPoll); } catch {} }
   },
   beforeDestroy(){
     window.removeEventListener('resize', this.updateListHeights);
@@ -446,6 +514,67 @@ export default {
   },
 
   methods: {
+    sampleToDo(){
+      const samples = [
+        'Polish my dragon armor', 'Refill flux capacitor', 'Call the Bat-Signal guy', 'Train a baby Jedi',
+        'Sort infinity stones by color', 'Feed the tribbles (carefully)', 'Polish Mjölnir', 'Recharge arc reactor',
+        'Assemble the Fellowship', 'Schedule a holodeck break', 'Debug the Matrix', 'Invite Gandalf for tea',
+        'Rotate the Death Star tires', 'Calibrate the proton pack', 'Walk the doggo-saurus', 'Refuel the TARDIS',
+        'Sharpen the vibroblade', 'Upgrade Stark nanotech', 'Bake cookies for the Shire', 'Check in on R2-D2',
+        'Water the Groot', 'Polish the One Ring (kidding)', 'Catch all the Pokémon', 'Practice Patronus charm',
+        'Refold the map to Mordor', 'Craft a lightsaber hilt', 'Assemble Voltron', 'Clean the Batmobile',
+        'Reboot HAL (with caution)', 'Charge the sonic screwdriver', 'Teach Balrog to sit (nope)', 'Borrow Hermione’s Time-Turner',
+        'Dust the Holocron shelf', 'Prep the portal gun', 'Tune the warp drive', 'Send ravens to Winterfell',
+        'Feed Hedwig some treats', 'Polish the Elder Wand', 'Top up Pym particles', 'Arrange Quidditch practice',
+        'Bake lembas bread', 'Clean the hoverboard', 'Refit the Normandy', 'Sharpen Master Sword',
+        'Tame a chocobo', 'Recharge Nimbus 2000', 'Collect rupees (green ones)', 'Pet the direwolf',
+        'Polish the silver surfer', 'Refactor the holocron API'
+      ];
+      return samples[Math.floor(Math.random()*samples.length)];
+    },
+    updateAccentFromBackground(){
+      try {
+        const root = document.documentElement;
+        const bgEl = document.querySelector('.app-bg');
+        if (!bgEl) return;
+        const bi = getComputedStyle(bgEl).backgroundImage;
+        const m = bi && bi.match(/url\(["']?(.*?)["']?\)/);
+        const src = m && m[1]; if (!src) return;
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const c = document.createElement('canvas');
+            const w = 32, ch = 32; c.width = w; c.height = ch;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, ch);
+            const data = ctx.getImageData(0,0,w,ch).data;
+            let r=0,g=0,b=0,count=0;
+            for (let i=0;i<data.length;i+=4){ const rr=data[i], gg=data[i+1], bb=data[i+2], aa=data[i+3]; if (aa<8) continue; r+=rr; g+=gg; b+=bb; count++; }
+            if (count===0) return;
+            r=Math.round(r/count); g=Math.round(g/count); b=Math.round(b/count);
+            // boost saturation/lightness slightly
+            const toHsl=(r,g,b)=>{ r/=255; g/=255; b/=255; const max=Math.max(r,g,b),min=Math.min(r,g,b); let h,s,l=(max+min)/2; if(max===min){h=s=0;} else {const d=max-min; s=l>0.5? d/(2-max-min): d/(max+min); switch(max){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;case b:h=(r-g)/d+4;break;} h/=6;} return [h,s,l]; };
+            const toRgb=(h,s,l)=>{ let r,g,b; if(s===0){r=g=b=l;} else {const hue2rgb=(p,q,t)=>{ if(t<0) t+=1; if(t>1) t-=1; if(t<1/6) return p+(q-p)*6*t; if(t<1/2) return q; if(t<2/3) return p+(q-p)*(2/3-t)*6; return p;}; const q=l<0.5? l*(1+s): l+s-l*s; const p=2*l-q; r=hue2rgb(p,q,h+1/3); g=hue2rgb(p,q,h); b=hue2rgb(p,q,h-1/3);} return [Math.round(r*255),Math.round(g*255),Math.round(b*255)]; };
+            // compute brightest pixel as accent
+            let maxY = -1, br=rr, bg=gg, bb=bb; // init with avg
+            for (let i=0;i<data.length;i+=4){ const R=data[i], G=data[i+1], B=data[i+2], A=data[i+3]; if(A<8) continue; const Y=0.2126*R+0.7152*G+0.0722*B; if(Y>maxY){ maxY=Y; br=R; bg=G; bb=B; } }
+            let [h,s,l]=toHsl(br,bg,bb); s=Math.min(1,s*1.25); l=Math.min(0.9, Math.max(0.5,l*1.1)); const [rr,gg,bb2]=toRgb(h,s,l);
+            const hex = '#' + [rr,gg,bb2].map(x=>x.toString(16).padStart(2,'0')).join('');
+            // medium overall tone based on average (balanced)
+            let [hm,sm,lm]=toHsl(r,g,b); sm=Math.min(0.5, sm*0.8); lm=0.5; const [mr,mg,mb]=toRgb(hm,sm,lm);
+            const hexMedium = '#' + [mr,mg,mb].map(x=>x.toString(16).padStart(2,'0')).join('');
+            // only update vars if changed to avoid repaint flicker
+            const setVar = (k,v)=>{ const cur = getComputedStyle(root).getPropertyValue(k).trim(); if (cur !== v) root.style.setProperty(k, v); };
+            setVar('--clr-primary', hex);
+            setVar('--accent-bright', hex);
+            setVar('--tone-medium', hexMedium);
+            setVar('--interactive-hover', `color-mix(in oklab, ${hex} 40%, transparent)`);
+          } catch {}
+        };
+        img.src = src;
+      } catch {}
+    },
     updateListHeights(){
       try {
         const cards = document.querySelectorAll('.list-element, .list-card');
@@ -469,7 +598,8 @@ export default {
 
           // 1) Set the scroll area height exactly to the remaining space
           const available = Math.max(0, cardH - padTop - padBottom - headerH - headerMB - footerH);
-          const listHeightPx = Math.max(0, Math.floor(available * dpr) / dpr);
+          const fudge = 1 / dpr; // ensure list ends just above footer edge
+          const listHeightPx = Math.max(0, Math.floor((available - fudge) * dpr) / dpr);
           listEl.style.height = listHeightPx + 'px';
 
           // 2) Base row height strictly on the scroll element height (measured)
@@ -507,14 +637,27 @@ export default {
     },
     handleGlobalClick(e){
       try {
-        const openId = this.ui.listAddMenuId;
-        if (!openId) return;
-        const menu = document.getElementById('add-menu-'+openId);
-        const anchor = document.getElementById('add-anchor-'+openId);
         const t = e.target;
-        if (menu && (menu===t || menu.contains(t))) return;
-        if (anchor && (anchor===t || anchor.contains(t))) return;
-        this.toggleAddMenu(null);
+        // Close add menu if click outside
+        const openAdd = this.ui.listAddMenuId;
+        if (openAdd){
+          const menu = document.getElementById('add-menu-'+openAdd);
+          const anchor = document.getElementById('add-anchor-'+openAdd);
+          if (!(menu && (menu===t || menu.contains(t))) && !(anchor && (anchor===t || anchor.contains(t)))) {
+            this.toggleAddMenu(null);
+          }
+        }
+        // Close action menus if click outside
+        const closeIfOutside = (key, selector)=>{
+          const id = this.ui[key]; if(!id) return;
+          const el = document.getElementById('menu-'+selector+id);
+          if (el && !(el===t || el.contains(t))) this.ui[key]=null;
+        };
+        closeIfOutside('listActionsId','list-');
+        closeIfOutside('flowActionsId','flow-');
+        closeIfOutside('stepActionsId','step-');
+        closeIfOutside('stepTaskActionsId','steptask-');
+        closeIfOutside('taskActionsId','task-');
       } catch {}
     },
     save() {
@@ -545,7 +688,8 @@ export default {
       this.ui.listAddMenuId = opening ? id : null;
       if (!opening) return;
       this.ui.addMode = 'task';
-      this.ui.newTaskTitle = 'ToDo';
+      this.ui.placeholderSample = this.sampleToDo();
+      this.ui.newTaskTitle = this.ui.placeholderSample;
       // default flow selection to first available
       this.ui.selectedFlowId = (this.flows[0] && this.flows[0].id) ? this.flows[0].id : '';
       this.$nextTick(() => this.decideAddMenuPlacement(id));
@@ -581,11 +725,43 @@ export default {
         zIndex: 60,
       };
     },
-    toggleListActions(id){ this.ui.listActionsId = this.ui.listActionsId===id ? null : id; },
-    toggleFlowActions(id){ this.ui.flowActionsId = this.ui.flowActionsId===id ? null : id; },
-    toggleStepActions(id){ this.ui.stepActionsId = this.ui.stepActionsId===id ? null : id; },
-    toggleStepTaskActions(id){ this.ui.stepTaskActionsId = this.ui.stepTaskActionsId===id ? null : id; },
-    toggleTaskActions(id){ this.ui.taskActionsId = this.ui.taskActionsId===id ? null : id; },
+    toggleListActions(id, ev){ this.ui.listActionsId = this.ui.listActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('list-'+id, ev)); },
+    toggleFlowActions(id, ev){ this.ui.flowActionsId = this.ui.flowActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('flow-'+id, ev)); },
+    toggleStepActions(id, ev){ this.ui.stepActionsId = this.ui.stepActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('step-'+id, ev)); },
+    toggleStepTaskActions(id, ev){ this.ui.stepTaskActionsId = this.ui.stepTaskActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('steptask-'+id, ev)); },
+    toggleTaskActions(id, ev){ this.ui.taskActionsId = this.ui.taskActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('task-'+id, ev)); },
+    openTaskMenu(list, t, ev){
+      const id = t.id;
+      this.ui.taskActionsId = this.ui.taskActionsId===id ? null : id;
+      this.$nextTick(()=>this.decideMenuDir('task-'+id, ev));
+    },
+    decideMenuDir(key, ev){
+      try {
+        const anchor = ev?.currentTarget || ev?.target || null;
+        const rect = anchor ? anchor.getBoundingClientRect() : null;
+        const menu = document.getElementById('menu-'+key);
+        const mh = menu?.offsetHeight || 160;
+        const margin = 6;
+        // Prefer fitting within the list scroll area if available
+        const card = anchor ? (anchor.closest('.list-element') || anchor.closest('.list-card')) : null;
+        const scroll = card ? card.querySelector('.list-scroll') : null;
+        const sr = scroll ? scroll.getBoundingClientRect() : null;
+        let dir = 'down';
+        if (rect) {
+          if (sr) {
+            const spaceBelow = sr.bottom - rect.bottom;
+            const spaceAbove = rect.top - sr.top;
+            if (spaceBelow >= mh + margin) dir = 'down';
+            else if (spaceAbove >= mh + margin) dir = 'up';
+            else dir = (spaceBelow >= spaceAbove) ? 'down' : 'up';
+          } else {
+            const spaceBelowWin = window.innerHeight - rect.bottom;
+            dir = spaceBelowWin >= mh + margin ? 'down' : 'up';
+          }
+        }
+        this.$set ? this.$set(this.ui.menuDir, key, dir) : (this.ui.menuDir[key]=dir);
+      } catch {}
+    },
 
     /* --- lists --- */
     addList() {
@@ -633,13 +809,15 @@ export default {
       }
     },
     onTaskTitleFocus(e){
-      if ((this.ui.newTaskTitle || '').trim().toLowerCase() === 'todo') {
+      const cur = (this.ui.newTaskTitle || '').trim().toLowerCase();
+      if (cur === (this.ui.placeholderSample||'').trim().toLowerCase()) {
         this.ui.newTaskTitle = '';
       }
     },
     onTaskTitleBlur(e){
       if (!(this.ui.newTaskTitle || '').trim()) {
-        this.ui.newTaskTitle = 'ToDo';
+        this.ui.placeholderSample = this.sampleToDo();
+        this.ui.newTaskTitle = this.ui.placeholderSample;
       }
     },
     editTask(list, t) {

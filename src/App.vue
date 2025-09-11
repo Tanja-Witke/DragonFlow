@@ -59,7 +59,14 @@
               <span v-else>Statistics</span>
             </h1>
           </div>
-          <div></div>
+          <div class="flex items-center gap-1">
+            <button class="btn-ghost" :class="{ 'opacity-50 pointer-events-none': !canUndo }" :disabled="!canUndo" @click="undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-5-5 5-5"/><path d="M20 20a8 8 0 0 0-8-8H4"/></svg>
+            </button>
+            <button class="btn-ghost" :class="{ 'opacity-50 pointer-events-none': !canRedo }" :disabled="!canRedo" @click="redo" title="Redo (Ctrl+Y or Shift+Ctrl/Cmd+Z)" aria-label="Redo">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l5 5-5 5"/><path d="M4 20a8 8 0 0 1 8-8h8"/></svg>
+            </button>
+          </div>
         </div>
 
         <!-- CONTENT AREA -->
@@ -433,6 +440,9 @@ export default {
         taskActionsId: null,
         menuDir: {},
         historyActionsKey: null,
+        // history stacks
+        undoStack: [],
+        redoStack: [],
       }
     };
   },
@@ -459,6 +469,8 @@ export default {
       (this.lists || []).forEach(l => ids.add(l.id));
       return Array.from(ids);
     },
+    canUndo() { return (this.ui.undoStack?.length || 0) > 0; },
+    canRedo() { return (this.ui.redoStack?.length || 0) > 0; },
   },
 
   created() {
@@ -514,11 +526,14 @@ export default {
           } catch {}
         }, 5000);
       } catch {}
+      // Undo/Redo keyboard shortcuts
+      window.addEventListener('keydown', this.handleUndoShortcut, { passive: false });
     });
   },
   beforeDestroy(){
     window.removeEventListener('resize', this.updateListHeights);
     window.removeEventListener('click', this.handleGlobalClick);
+    window.removeEventListener('keydown', this.handleUndoShortcut);
     if (this._accentDebounced) {
       window.removeEventListener('resize', this._accentDebounced);
       window.removeEventListener('orientationchange', this._accentDebounced);
@@ -543,33 +558,109 @@ export default {
   },
 
   methods: {
-    restoreHistoryItem(lid, h) {
+    /* --- Undo/Redo core --- */
+    _deepClone(obj){ try { return JSON.parse(JSON.stringify(obj)); } catch { return obj; } },
+    pushUndo(label='') {
       try {
-        // Find or create the destination list by ID (not name)
-        let list = this.lists.find(l=>l.id===lid);
-        if (!list) {
-          const title = this.listTitles[lid] || 'Restored List';
-          list = { id: lid, title, tasks: [] };
-          this.lists.push(list);
-          this.listTitles[lid] = title;
-        }
-        if (!this.listTitles[lid]) this.listTitles[lid] = list.title;
-        const exists = list.tasks.some(t=>t.id===h.id);
-        if (!exists) {
-          list.tasks.push({
-            id: h.id,
-            title: h.title,
-            fromFlowId: h.fromFlowId || null,
-            stepIndex: h.stepIndex ?? null,
-          });
-        }
-        // remove this entry from history (first match by id and timestamp)
-        const arr = this.history[lid] || [];
-        const idx = arr.findIndex(x=> x===h || (x && x.id===h.id && x.completedAt===h.completedAt));
-        if (idx >= 0) arr.splice(idx, 1);
-        this.ui.historyActionsKey = null;
+        const snap = {
+          lists: this._deepClone(this.lists),
+          flows: this._deepClone(this.flows),
+          history: this._deepClone(this.history),
+          listTitles: this._deepClone(this.listTitles),
+          label,
+          ts: Date.now(),
+        };
+        this.ui.undoStack.push(snap);
+        const cap = 100;
+        if (this.ui.undoStack.length > cap) this.ui.undoStack.shift();
+      } catch {}
+    },
+    applySnapshot(snap){
+      try {
+        if (!snap) return;
+        this.lists = this._deepClone(snap.lists || []);
+        this.flows = this._deepClone(snap.flows || []);
+        this.history = this._deepClone(snap.history || {});
+        this.listTitles = this._deepClone(snap.listTitles || {});
         this.$nextTick(this.updateListHeights);
       } catch {}
+    },
+    undo(){
+      try {
+        const prev = this.ui.undoStack.pop();
+        if (!prev) return;
+        const cur = {
+          lists: this._deepClone(this.lists),
+          flows: this._deepClone(this.flows),
+          history: this._deepClone(this.history),
+          listTitles: this._deepClone(this.listTitles),
+          label: 'redo', ts: Date.now()
+        };
+        this.ui.redoStack.push(cur);
+        this.applySnapshot(prev);
+      } catch {}
+    },
+    redo(){
+      try {
+        const next = this.ui.redoStack.pop();
+        if (!next) return;
+        const cur = {
+          lists: this._deepClone(this.lists),
+          flows: this._deepClone(this.flows),
+          history: this._deepClone(this.history),
+          listTitles: this._deepClone(this.listTitles),
+          label: 'undo', ts: Date.now()
+        };
+        this.ui.undoStack.push(cur);
+        this.applySnapshot(next);
+      } catch {}
+    },
+    mutate(label, fn){
+      this.pushUndo(label);
+      try { fn && fn(); } catch {}
+      this.ui.redoStack = [];
+      this.$nextTick(this.updateListHeights);
+    },
+    handleUndoShortcut(e){
+      try {
+        const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+        const isEditable = document.activeElement && (document.activeElement.isContentEditable || tag==='input' || tag==='textarea');
+        if (isEditable) return; // don't hijack typing undo
+        const key = (e.key || '').toLowerCase();
+        const mod = e.ctrlKey || e.metaKey;
+        if (!mod) return;
+        if (!e.shiftKey && key === 'z') { e.preventDefault(); this.undo(); }
+        else if (key === 'y' || (e.shiftKey && key === 'z')) { e.preventDefault(); this.redo(); }
+      } catch {}
+    },
+    restoreHistoryItem(lid, h) {
+      this.mutate('restoreFromHistory', () => {
+        try {
+          // Find or create the destination list by ID (not name)
+          let list = this.lists.find(l=>l.id===lid);
+          if (!list) {
+            const title = this.listTitles[lid] || 'Restored List';
+            list = { id: lid, title, tasks: [] };
+            this.lists.push(list);
+            this.listTitles[lid] = title;
+          }
+          if (!this.listTitles[lid]) this.listTitles[lid] = list.title;
+          const exists = list.tasks.some(t=>t.id===h.id);
+          if (!exists) {
+            list.tasks.push({
+              id: h.id,
+              title: h.title,
+              fromFlowId: h.fromFlowId || null,
+              stepIndex: h.stepIndex ?? null,
+            });
+          }
+          // remove this entry from history (first match by id and timestamp)
+          const arr = this.history[lid] || [];
+          const idx = arr.findIndex(x=> x===h || (x && x.id===h.id && x.completedAt===h.completedAt));
+          if (idx >= 0) arr.splice(idx, 1);
+          this.ui.historyActionsKey = null;
+        } catch {}
+      });
     },
     canRestoreHistory(h){
       if (!h || !h.id) return false;
@@ -645,20 +736,22 @@ export default {
         const drag = this.ui.drag || {};
         const drop = this.ui.drop || {};
         if (!drag.taskId || !drag.srcListId || !drop.listId || drop.index == null) { this.clearDragState(); return; }
-        const srcList = this.lists.find(l=>l.id===drag.srcListId);
-        const destList = this.lists.find(l=>l.id===drop.listId);
-        if (!srcList || !destList) { this.clearDragState(); return; }
-        const curIdx = srcList.tasks.findIndex(t=>t.id===drag.taskId);
-        if (curIdx < 0) { this.clearDragState(); return; }
-        // no-op guard when dropping in the same place
-        if (srcList.id === destList.id && (drop.index === curIdx || drop.index === curIdx + 1)) { this.clearDragState(); return; }
-        const [task] = srcList.tasks.splice(curIdx, 1);
-        let insert = drop.index;
-        if (destList.id === srcList.id && insert > curIdx) insert -= 1;
-        insert = Math.max(0, Math.min(insert, destList.tasks.length));
-        destList.tasks.splice(insert, 0, task);
-        this.ui.taskActionsId = null;
-        this.$nextTick(this.updateListHeights);
+        const srcId = drag.srcListId; const dstId = drop.listId;
+        const curInd = drop.index;
+        this.mutate('dndMoveTask', () => {
+          const srcList = this.lists.find(l=>l.id===srcId);
+          const destList = this.lists.find(l=>l.id===dstId);
+          if (!srcList || !destList) return;
+          const curIdx = srcList.tasks.findIndex(t=>t.id===drag.taskId);
+          if (curIdx < 0) return;
+          if (srcList.id === destList.id && (curInd === curIdx || curInd === curIdx + 1)) return;
+          const [task] = srcList.tasks.splice(curIdx, 1);
+          let insert = curInd;
+          if (destList.id === srcList.id && insert > curIdx) insert -= 1;
+          insert = Math.max(0, Math.min(insert, destList.tasks.length));
+          destList.tasks.splice(insert, 0, task);
+          this.ui.taskActionsId = null;
+        });
       } catch {}
       this.clearDragState();
     },
@@ -942,57 +1035,64 @@ export default {
     /* --- lists --- */
     addList() {
       const title = prompt('List title?'); if (!title) return;
-      const list = { id: uid(), title: title.trim(), tasks: [] };
-      this.lists.push(list);
-      this.listTitles[list.id] = list.title;
-      this.closeAllMenus();
-      this.$nextTick(this.updateListHeights);
+      this.mutate('addList', () => {
+        const list = { id: uid(), title: title.trim(), tasks: [] };
+        this.lists.push(list);
+        this.listTitles[list.id] = list.title;
+        this.closeAllMenus();
+      });
     },
     renameList(list) {
       const v = prompt('Rename list', list.title); if (!v) return;
-      list.title = v.trim();
-      this.listTitles[list.id] = list.title;
-      this.closeAllMenus();
+      this.mutate('renameList', () => {
+        list.title = v.trim();
+        this.listTitles[list.id] = list.title;
+        this.closeAllMenus();
+      });
     },
     removeList(id) {
       if (!confirm('Delete this list?')) return;
-      // keep history and title for deleted lists
-      const list = this.lists.find(l=>l.id===id);
-      if (!this.history[id]) this.history[id] = [];
-      if (list && Array.isArray(list.tasks)) {
-        const ts = Date.now();
-        // record each task as a deleted history item
-        list.tasks.forEach(t => {
-          this.history[id].unshift({
-            id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
-            stepIndex: t.stepIndex ?? null, completedAt: ts, action: 'deleted'
+      this.mutate('removeList', () => {
+        // keep history and title for deleted lists
+        const list = this.lists.find(l=>l.id===id);
+        if (!this.history[id]) this.history[id] = [];
+        if (list && Array.isArray(list.tasks)) {
+          const ts = Date.now();
+          // record each task as a deleted history item
+          list.tasks.forEach(t => {
+            this.history[id].unshift({
+              id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
+              stepIndex: t.stepIndex ?? null, completedAt: ts, action: 'deleted'
+            });
           });
-        });
-        // If list has no tasks, ensure it still appears in history
-        if (list.tasks.length === 0) {
+          // If list has no tasks, ensure it still appears in history
+          if (list.tasks.length === 0) {
+            this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted' });
+          }
+        } else {
+          // ensure history array exists so list shows up
+          this.history[id] = this.history[id] || [];
+          const ts = Date.now();
           this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted' });
         }
-      } else {
-        // ensure history array exists so list shows up
-        this.history[id] = this.history[id] || [];
-        const ts = Date.now();
-        this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted' });
-      }
-      this.lists = this.lists.filter(l=>l.id!==id);
-      this.closeAllMenus();
-      this.$nextTick(this.updateListHeights);
+        this.lists = this.lists.filter(l=>l.id!==id);
+        this.closeAllMenus();
+      });
     },
     promptAddTask(list) {
       const title = prompt('Task title?'); if (!title) return;
-      list.tasks.push({ id: uid(), title: title.trim(), fromFlowId: null, stepIndex: null });
-      this.toggleAddMenu(null);
+      this.mutate('addTaskPrompt', () => {
+        list.tasks.push({ id: uid(), title: title.trim(), fromFlowId: null, stepIndex: null });
+        this.toggleAddMenu(null);
+      });
     },
     addTaskWithTitle(list){
       const t = (this.ui.newTaskTitle || '').trim();
       if (!t) return;
-      list.tasks.push({ id: uid(), title: t, fromFlowId: null, stepIndex: null });
-      this.toggleAddMenu(null);
-      this.$nextTick(this.updateListHeights);
+      this.mutate('addTask', () => {
+        list.tasks.push({ id: uid(), title: t, fromFlowId: null, stepIndex: null });
+        this.toggleAddMenu(null);
+      });
     },
     setAddMode(mode){
       this.ui.addMode = mode;
@@ -1019,36 +1119,38 @@ export default {
     },
     editTask(list, t) {
       const v = prompt('Edit task', t.title); if (!v) return;
-      t.title = v.trim(); this.closeAllMenus();
+      this.mutate('editTask', () => { t.title = v.trim(); this.closeAllMenus(); });
     },
     removeTask(list, taskId) {
-      // add to history as deleted card
-      try {
-        const t = list.tasks.find(x=>x.id===taskId);
-        if (t) {
-          if (!this.history[list.id]) this.history[list.id] = [];
-          this.history[list.id].unshift({
-            id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
-            stepIndex: t.stepIndex ?? null, completedAt: Date.now(), action: 'deleted'
-          });
-        }
-      } catch {}
-      list.tasks = list.tasks.filter(t=>t.id!==taskId);
-      if (this.ui.taskActionsId===taskId) this.ui.taskActionsId = null;
-      this.$nextTick(this.updateListHeights);
+      this.mutate('removeTask', () => {
+        try {
+          const t = list.tasks.find(x=>x.id===taskId);
+          if (t) {
+            if (!this.history[list.id]) this.history[list.id] = [];
+            this.history[list.id].unshift({
+              id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
+              stepIndex: t.stepIndex ?? null, completedAt: Date.now(), action: 'deleted'
+            });
+          }
+        } catch {}
+        list.tasks = list.tasks.filter(t=>t.id!==taskId);
+        if (this.ui.taskActionsId===taskId) this.ui.taskActionsId = null;
+      });
     },
 
     /* --- flows applied to lists (runtime) --- */
     addFlowToList(list, flowId) {
       const f = this.flows.find(x=>x.id===flowId); if (!f) return;
       const first = f.steps[0];
-      if (first?.taskTitle?.trim()) {
-        list.tasks.push({
-          id: uid(), title: first.taskTitle.trim(), fromFlowId: f.id, stepIndex: 0
-        });
-      }
-      this.toggleAddMenu(null);
-      this.ui.selectedFlowId = '';
+      this.mutate('addFlowTaskToList', () => {
+        if (first?.taskTitle?.trim()) {
+          list.tasks.push({
+            id: uid(), title: first.taskTitle.trim(), fromFlowId: f.id, stepIndex: 0
+          });
+        }
+        this.toggleAddMenu(null);
+        this.ui.selectedFlowId = '';
+      });
     },
 
     completeTask(list, task, ev) {
@@ -1065,6 +1167,8 @@ export default {
       }
       this.playSuccessSound(isFinalFlow);
       setTimeout(() => {
+        // record state right before applying the completion change
+        this.pushUndo('completeTask');
         if (!this.history[list.id]) this.history[list.id] = [];
         this.history[list.id].unshift({
           id: task.id, title: task.title, fromFlowId: task.fromFlowId || null,
@@ -1088,6 +1192,8 @@ export default {
           }
         }
         delete this.ui.completing[task.id];
+        // clear redo since this was a new mutation
+        this.ui.redoStack = [];
       }, 320);
     },
     playSuccessSound(final=false) {
@@ -1147,39 +1253,39 @@ export default {
     /* --- flows editor --- */
     addFlow() {
       const title = prompt('Flow title?'); if (!title) return;
-      this.flows.push({ id: uid(), title: title.trim(), steps: [] });
+      this.mutate('addFlow', () => { this.flows.push({ id: uid(), title: title.trim(), steps: [] }); });
     },
     renameFlow(flow) {
       const v = prompt('Rename flow', flow.title); if (!v) return;
-      flow.title = v.trim(); this.closeAllMenus();
+      this.mutate('renameFlow', () => { flow.title = v.trim(); this.closeAllMenus(); });
     },
     removeFlow(id) {
       if (!confirm('Delete this flow?')) return;
-      this.flows = this.flows.filter(f=>f.id!==id); this.closeAllMenus();
+      this.mutate('removeFlow', () => { this.flows = this.flows.filter(f=>f.id!==id); this.closeAllMenus(); });
     },
     addStep(flow) {
       const type = prompt('Step type (only "single" available)', 'single');
       if (!type) return;
-      flow.steps.push({ id: uid(), type: type.trim().toLowerCase(), taskTitle: '' });
+      this.mutate('addStep', () => { flow.steps.push({ id: uid(), type: type.trim().toLowerCase(), taskTitle: '' }); });
     },
     deleteStep(flow, stepId) {
-      flow.steps = flow.steps.filter(s=>s.id!==stepId); this.closeAllMenus();
+      this.mutate('deleteStep', () => { flow.steps = flow.steps.filter(s=>s.id!==stepId); this.closeAllMenus(); });
     },
     renameStep(step) {
       const v = prompt('Rename step label (optional note)', step.note || ''); // optional note
       if (v===null) return;
-      step.note = v.trim(); this.closeAllMenus();
+      this.mutate('renameStep', () => { step.note = v.trim(); this.closeAllMenus(); });
     },
     addStepTask(step) {
       const v = prompt('Task title for this step'); if (!v) return;
-      step.taskTitle = v.trim(); this.closeAllMenus();
+      this.mutate('addStepTask', () => { step.taskTitle = v.trim(); this.closeAllMenus(); });
     },
     renameStepTask(step) {
       const v = prompt('Edit task title', step.taskTitle || ''); if (!v) return;
-      step.taskTitle = v.trim(); this.closeAllMenus();
+      this.mutate('renameStepTask', () => { step.taskTitle = v.trim(); this.closeAllMenus(); });
     },
     removeStepTask(step) {
-      step.taskTitle = ''; this.closeAllMenus();
+      this.mutate('removeStepTask', () => { step.taskTitle = ''; this.closeAllMenus(); });
     },
   },
 };

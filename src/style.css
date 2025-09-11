@@ -57,6 +57,7 @@
   .text-sec    { color: var(--clr-text-2); }
   .text-muted  { color: var(--clr-muted); }
   .text-primary{ color: var(--clr-primary); }
+  .text-danger { color: var(--clr-danger); }
   .bg-surface  { background: color-mix(in oklab, var(--clr-surface) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
   .bg-elev     { background: color-mix(in oklab, var(--clr-elev) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
   .is-active   { background: color-mix(in oklab, var(--clr-elev) 85%, black 0%); color: var(--clr-text); }
@@ -124,6 +125,18 @@
 .task-item { @apply rounded-lg transition; position: relative; padding-right: 4px; height: var(--row-fit, var(--row-nominal)); margin: 0 !important; box-sizing: border-box; }
   :root { --interactive-hover: color-mix(in oklab, var(--clr-primary) 40%, transparent); }
   .task-item:hover { background: var(--interactive-hover); }
+  /* Drag & drop indicators */
+  .task-item.dragging { opacity: .55; }
+  .task-item.drop-before::before,
+  .task-item.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 8px; right: 8px; height: 2px;
+    background: color-mix(in oklab, var(--accent-bright) 80%, white 20%);
+    box-shadow: 0 0 6px color-mix(in oklab, var(--accent-bright) 40%, transparent);
+  }
+  .task-item.drop-before::before { top: -1px; }
+  .task-item.drop-after::after { bottom: -1px; }
   /* Flow tasks look like normal tasks; highlight the checkbox instead */
   .flow-task { position: relative; background: transparent; }
   .flow-task::after { display: none; }

@@ -103,13 +103,23 @@
               <!-- tasks area container (fills available height) -->
               <div class="task-area overflow-hidden">
               <!-- tasks (active only) -->
-              <ul class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll" @scroll="onListScrollDeferred($event)">
+              <ul
+                class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll"
+                @scroll="onListScrollDeferred($event)"
+                @dragover.prevent="onListDragOver(list, $event)"
+                @drop="onListDrop(list, $event)"
+              >
                 <li
-                  v-for="t in list.tasks"
+                  v-for="(t, ti) in list.tasks"
                   :key="t.id"
                   class="group relative flex items-center gap-2 px-2 py-1 task-item snap-start cursor-pointer"
-                  :class="[ t.fromFlowId ? 'flow-task' : '', ui.completing[t.id] ? 'completing' : '' ]"
-                  @click.stop="openTaskMenu(list, t, $event)"
+                  :class="[ t.fromFlowId ? 'flow-task' : '', ui.completing[t.id] ? 'completing' : '', taskDnDClass(list, t, ti) ]"
+                  draggable="true"
+                  @click.stop="onTaskRowClick(list, t, $event)"
+                  @dragstart="onTaskDragStart(list, t, ti, $event)"
+                  @dragend="onTaskDragEnd($event)"
+                  @dragover.prevent.stop="onTaskDragOver(list, t, ti, $event)"
+                  @drop.stop="onTaskDropOnItem(list, t, ti, $event)"
                 >
                   
 
@@ -323,7 +333,7 @@
                 <div
                   v-for="lid in allListIds"
                   :key="lid + '-history'"
-                  class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col"
+                  class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col h-full"
                   :class="cardWidth"
                 >
                   <div class="flex items-center justify-between mb-2">
@@ -333,14 +343,28 @@
                 </h2>
               </div>
 
-              <ul class="flex-1 overflow-y-auto overflow-x-hidden scrollbar-left pl-1">
+              <ul class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll">
                 <li
                   v-for="h in (history[lid] || [])"
-                  :key="h.id"
-                  class="flex items-center gap-2 px-2 py-1 rounded-lg"
+                  :key="h.id + '-' + (h.completedAt||0) + '-hist'"
+                  class="group relative flex items-center gap-2 px-2 py-1 task-item snap-start cursor-pointer"
+                  @click.stop="openHistoryMenu(lid, h, $event)"
                 >
-                  <span class="line-through text-muted flex-1 truncate">{{ h.title }}</span>
+                  <span
+                    :class="[
+                      ((h.action||'completed')==='completed') ? 'line-through text-muted' : 'text-danger italic',
+                      'flex-1 text-left leading-tight truncate'
+                    ]"
+                  >{{ h.title }}</span>
                   <span class="text-[10px] text-sec">{{ formatTime(h.completedAt) }}</span>
+                  <div
+                    v-if="ui.historyActionsKey === (lid + '-' + h.id + '-' + (h.completedAt||0))"
+                    :id="'menu-history-' + lid + '-' + h.id + '-' + (h.completedAt||0)"
+                    class="menu-pop right"
+                    :class="ui.menuDir['history-' + lid + '-' + h.id + '-' + (h.completedAt||0)] === 'up' ? 'up' : 'down'"
+                  >
+                    <button v-if="canRestoreHistory(h)" class="menu-item" @click.stop="restoreHistoryItem(lid, h)">Restore</button>
+                  </div>
                 </li>
               </ul>
             </div>
@@ -388,7 +412,7 @@ export default {
       tab: 'lists', // 'lists' | 'flows' | 'history' | 'settings' | 'stats'
       lists: [],
       flows: [],
-      history: {}, // { [listId]: [{id,title,completedAt,fromFlowId,stepIndex}] }
+      history: {}, // { [listId]: [{id,title,completedAt,fromFlowId,stepIndex,action?: 'completed'|'deleted'}] }
       listTitles: {}, // { [listId]: title } - persists names for deleted lists
       ui: {
         sideOpen: false,
@@ -408,6 +432,7 @@ export default {
         stepTaskActionsId: null,
         taskActionsId: null,
         menuDir: {},
+        historyActionsKey: null,
       }
     };
   },
@@ -511,9 +536,153 @@ export default {
     flows: { deep: true, handler() { this.save(); } },
     history: { deep: true, handler() { this.save(); } },
     listTitles: { deep: true, handler() { this.save(); } },
+    tab(newVal) {
+      // Recalculate list heights when switching back to Lists
+      if (newVal === 'lists') this.$nextTick(this.updateListHeights);
+    },
   },
 
   methods: {
+    restoreHistoryItem(lid, h) {
+      try {
+        // Find or create the destination list by ID (not name)
+        let list = this.lists.find(l=>l.id===lid);
+        if (!list) {
+          const title = this.listTitles[lid] || 'Restored List';
+          list = { id: lid, title, tasks: [] };
+          this.lists.push(list);
+          this.listTitles[lid] = title;
+        }
+        if (!this.listTitles[lid]) this.listTitles[lid] = list.title;
+        const exists = list.tasks.some(t=>t.id===h.id);
+        if (!exists) {
+          list.tasks.push({
+            id: h.id,
+            title: h.title,
+            fromFlowId: h.fromFlowId || null,
+            stepIndex: h.stepIndex ?? null,
+          });
+        }
+        // remove this entry from history (first match by id and timestamp)
+        const arr = this.history[lid] || [];
+        const idx = arr.findIndex(x=> x===h || (x && x.id===h.id && x.completedAt===h.completedAt));
+        if (idx >= 0) arr.splice(idx, 1);
+        this.ui.historyActionsKey = null;
+        this.$nextTick(this.updateListHeights);
+      } catch {}
+    },
+    canRestoreHistory(h){
+      if (!h || !h.id) return false;
+      if (String(h.id).startsWith('__list_deleted__')) return false;
+      return true;
+    },
+    /* --- drag & drop: tasks --- */
+    onTaskRowClick(list, t, ev) {
+      if (this.ui.isDragging) return; // ignore clicks during drag
+      this.openTaskMenu(list, t, ev);
+    },
+    onTaskDragStart(list, t, ti, ev) {
+      try {
+        this.closeAllMenus();
+        if (!this.ui.drag) this.ui.drag = {};
+        this.ui.isDragging = true;
+        const idx = list.tasks.findIndex(x=>x.id===t.id);
+        this.ui.drag.taskId = t.id;
+        this.ui.drag.srcListId = list.id;
+        this.ui.drag.srcIndex = idx >= 0 ? idx : ti;
+        if (ev?.dataTransfer) {
+          ev.dataTransfer.effectAllowed = 'move';
+          try { ev.dataTransfer.setData('text/plain', t.id); } catch {}
+        }
+      } catch {}
+    },
+    onTaskDragEnd(ev) {
+      this.clearDragState();
+    },
+    onTaskDragOver(list, t, ti, ev) {
+      try {
+        const rect = ev.currentTarget?.getBoundingClientRect();
+        const mid = rect ? (rect.top + rect.height / 2) : ev.clientY;
+        const before = ev.clientY < mid;
+        const baseIdx = list.tasks.findIndex(x=>x.id===t.id);
+        const idx = baseIdx >= 0 ? baseIdx : ti;
+        const dropIndex = before ? idx : idx + 1;
+        if (!this.ui.drop) this.ui.drop = {};
+        this.ui.drop.listId = list.id;
+        this.ui.drop.index = Math.max(0, Math.min(dropIndex, list.tasks.length));
+        if (ev?.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+      } catch {}
+    },
+    onTaskDropOnItem(list, t, ti, ev) {
+      try {
+        if (!this.ui.drop || this.ui.drop.listId !== list.id) {
+          // fallback to drop before/after hovered item
+          const rect = ev.currentTarget?.getBoundingClientRect();
+          const mid = rect ? (rect.top + rect.height / 2) : ev.clientY;
+          const before = ev.clientY < mid;
+          const baseIdx = list.tasks.findIndex(x=>x.id===t.id);
+          const idx = baseIdx >= 0 ? baseIdx : ti;
+          const dropIndex = before ? idx : idx + 1;
+          this.ui.drop = { listId: list.id, index: Math.max(0, Math.min(dropIndex, list.tasks.length)) };
+        }
+      } catch {}
+      this.commitTaskDrop();
+    },
+    onListDragOver(list, ev) {
+      try {
+        if (!this.ui.drop) this.ui.drop = {};
+        // Default to end-of-list when hovering container (not a row)
+        this.ui.drop.listId = list.id;
+        this.ui.drop.index = (list.tasks && list.tasks.length) ? list.tasks.length : 0;
+        if (ev?.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+      } catch {}
+    },
+    onListDrop(list, ev) {
+      this.commitTaskDrop();
+    },
+    commitTaskDrop() {
+      try {
+        const drag = this.ui.drag || {};
+        const drop = this.ui.drop || {};
+        if (!drag.taskId || !drag.srcListId || !drop.listId || drop.index == null) { this.clearDragState(); return; }
+        const srcList = this.lists.find(l=>l.id===drag.srcListId);
+        const destList = this.lists.find(l=>l.id===drop.listId);
+        if (!srcList || !destList) { this.clearDragState(); return; }
+        const curIdx = srcList.tasks.findIndex(t=>t.id===drag.taskId);
+        if (curIdx < 0) { this.clearDragState(); return; }
+        // no-op guard when dropping in the same place
+        if (srcList.id === destList.id && (drop.index === curIdx || drop.index === curIdx + 1)) { this.clearDragState(); return; }
+        const [task] = srcList.tasks.splice(curIdx, 1);
+        let insert = drop.index;
+        if (destList.id === srcList.id && insert > curIdx) insert -= 1;
+        insert = Math.max(0, Math.min(insert, destList.tasks.length));
+        destList.tasks.splice(insert, 0, task);
+        this.ui.taskActionsId = null;
+        this.$nextTick(this.updateListHeights);
+      } catch {}
+      this.clearDragState();
+    },
+    clearDragState() {
+      try {
+        if (this.ui.drag) { this.ui.drag.taskId = null; this.ui.drag.srcListId = null; this.ui.drag.srcIndex = null; }
+        if (this.ui.drop) { this.ui.drop.listId = null; this.ui.drop.index = null; }
+        this.ui.isDragging = false;
+      } catch {}
+    },
+    taskDnDClass(list, t, ti) {
+      try {
+        const out = {};
+        if (this.ui.drag && this.ui.drag.taskId === t.id) out['dragging'] = true;
+        const drop = this.ui.drop;
+        if (drop && drop.listId === list.id) {
+          const lastIdx = (list.tasks?.length || 0) - 1;
+          if (drop.index === ti) out['drop-before'] = true;
+          if (drop.index === ti + 1) out['drop-after'] = true;
+          if (drop.index === (lastIdx + 1) && ti === lastIdx) out['drop-after'] = true;
+        }
+        return out;
+      } catch { return {}; }
+    },
     sampleToDo(){
       const samples = [
         'Polish my dragon armor', 'Refill flux capacitor', 'Call the Bat-Signal guy', 'Train a baby Jedi',
@@ -658,6 +827,7 @@ export default {
         closeIfOutside('stepActionsId','step-');
         closeIfOutside('stepTaskActionsId','steptask-');
         closeIfOutside('taskActionsId','task-');
+        closeIfOutside('historyActionsKey','history-');
       } catch {}
     },
     save() {
@@ -667,9 +837,9 @@ export default {
     },
     tabBtn(n) { return this.tab===n ? 'active font-semibold' : ''; },
     formatTime(ts) { const d = new Date(ts); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); },
-    toggleSideMd() { this.ui.sideOpen = !this.ui.sideOpen; },
+    toggleSideMd() { this.ui.sideOpen = !this.ui.sideOpen; this.$nextTick(this.updateListHeights); },
     closeSide() { this.ui.sideOpen = false; },
-    openFromSide(name) { this.tab = name; this.closeSide(); },
+    openFromSide(name) { this.tab = name; this.closeSide(); if (name === 'lists') this.$nextTick(this.updateListHeights); },
     isActiveList(id) { return this.lists.some(l => l.id === id); },
     listTitle(id) {
       const live = this.lists.find(l => l.id === id);
@@ -682,6 +852,7 @@ export default {
       this.ui.listAddMenuId = null; this.ui.selectedFlowId = '';
       this.ui.listActionsId = this.ui.flowActionsId = this.ui.stepActionsId =
         this.ui.stepTaskActionsId = this.ui.taskActionsId = null;
+      this.ui.historyActionsKey = null;
     },
     toggleAddMenu(id){
       const opening = this.ui.listAddMenuId !== id;
@@ -735,6 +906,11 @@ export default {
       this.ui.taskActionsId = this.ui.taskActionsId===id ? null : id;
       this.$nextTick(()=>this.decideMenuDir('task-'+id, ev));
     },
+    openHistoryMenu(lid, h, ev){
+      const key = lid + '-' + h.id + '-' + (h.completedAt||0);
+      this.ui.historyActionsKey = this.ui.historyActionsKey===key ? null : key;
+      this.$nextTick(()=>this.decideMenuDir('history-'+key, ev));
+    },
     decideMenuDir(key, ev){
       try {
         const anchor = ev?.currentTarget || ev?.target || null;
@@ -781,6 +957,27 @@ export default {
     removeList(id) {
       if (!confirm('Delete this list?')) return;
       // keep history and title for deleted lists
+      const list = this.lists.find(l=>l.id===id);
+      if (!this.history[id]) this.history[id] = [];
+      if (list && Array.isArray(list.tasks)) {
+        const ts = Date.now();
+        // record each task as a deleted history item
+        list.tasks.forEach(t => {
+          this.history[id].unshift({
+            id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
+            stepIndex: t.stepIndex ?? null, completedAt: ts, action: 'deleted'
+          });
+        });
+        // If list has no tasks, ensure it still appears in history
+        if (list.tasks.length === 0) {
+          this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted' });
+        }
+      } else {
+        // ensure history array exists so list shows up
+        this.history[id] = this.history[id] || [];
+        const ts = Date.now();
+        this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted' });
+      }
       this.lists = this.lists.filter(l=>l.id!==id);
       this.closeAllMenus();
       this.$nextTick(this.updateListHeights);
@@ -825,6 +1022,17 @@ export default {
       t.title = v.trim(); this.closeAllMenus();
     },
     removeTask(list, taskId) {
+      // add to history as deleted card
+      try {
+        const t = list.tasks.find(x=>x.id===taskId);
+        if (t) {
+          if (!this.history[list.id]) this.history[list.id] = [];
+          this.history[list.id].unshift({
+            id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
+            stepIndex: t.stepIndex ?? null, completedAt: Date.now(), action: 'deleted'
+          });
+        }
+      } catch {}
       list.tasks = list.tasks.filter(t=>t.id!==taskId);
       if (this.ui.taskActionsId===taskId) this.ui.taskActionsId = null;
       this.$nextTick(this.updateListHeights);
@@ -860,7 +1068,7 @@ export default {
         if (!this.history[list.id]) this.history[list.id] = [];
         this.history[list.id].unshift({
           id: task.id, title: task.title, fromFlowId: task.fromFlowId || null,
-          stepIndex: task.stepIndex ?? null, completedAt: Date.now()
+          stepIndex: task.stepIndex ?? null, completedAt: Date.now(), action: 'completed'
         });
         // remove from list
         list.tasks = list.tasks.filter(t=>t.id!==task.id);

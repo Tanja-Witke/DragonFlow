@@ -41,7 +41,7 @@
       <!-- MAIN COLUMN -->
       <div class="flex-1 flex flex-col overflow-hidden">
         <!-- TOP BAR -->
-        <div class="flex items-center justify-between px-3 py-2 bg-surface">
+        <div class="flex items-center justify-between px-3 py-2 bg-surface topbar">
           <div class="flex items-center gap-2">
             <button class="btn-ghost no-hover md:hidden" @click.stop="ui.sideOpen = true" aria-label="Open menu">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
@@ -58,13 +58,44 @@
               <span v-else-if="tab==='settings'">Settings</span>
               <span v-else>Statistics</span>
             </h1>
+            <!-- View switchers next to title -->
+            <div v-if="tab==='lists'" id="anchor-listview" class="relative">
+              <button class="btn-ghost" @click.stop="openListViewEditMenu($event)" title="Switch view" aria-label="Switch list view">
+                <span v-if="!ui.listViewNameEditing">{{ listViewName }}</span>
+                <input v-else ref="listViewNameInput" class="inline-edit" v-model.trim="ui.listViewEditName" @click.stop @keydown.enter.stop.prevent="saveListViewName" @keydown.esc.stop.prevent="cancelListViewName" @blur="saveListViewName" />
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div v-if="ui.listViewMenuOpen" id="menu-listview" class="menu-pop left" :class="ui.menuDir['listview'] === 'up' ? 'up' : 'down'">
+                <button v-for="v in listViews.filter(v=>v.id!==currentListViewId)" :key="v.id" class="menu-item" @click.stop="switchListView(v.id)">{{ v.name }}</button>
+                <div class="divider"></div>
+                <button class="menu-item" @click.stop="addListView">+ New View</button>
+              </div>
+            </div>
+            <div v-else-if="tab==='flows'" id="anchor-flowview" class="relative">
+              <button class="btn-ghost" @click.stop="openFlowViewEditMenu($event)" title="Switch view" aria-label="Switch flow view">
+                <span v-if="!ui.flowViewNameEditing">{{ flowViewName }}</span>
+                <input v-else ref="flowViewNameInput" class="inline-edit" v-model.trim="ui.flowViewEditName" @click.stop @keydown.enter.stop.prevent="saveFlowViewName" @keydown.esc.stop.prevent="cancelFlowViewName" @blur="saveFlowViewName" />
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div v-if="ui.flowViewMenuOpen" id="menu-flowview" class="menu-pop left" :class="ui.menuDir['flowview'] === 'up' ? 'up' : 'down'">
+                <button v-for="v in flowViews.filter(v=>v.id!==currentFlowViewId)" :key="v.id" class="menu-item" @click.stop="switchFlowView(v.id)">{{ v.name }}</button>
+                <div class="divider"></div>
+                <button class="menu-item" @click.stop="addFlowView">+ New View</button>
+              </div>
+            </div>
           </div>
           <div class="flex items-center gap-1">
             <button class="btn-ghost" :class="{ 'opacity-50 pointer-events-none': !canUndo }" :disabled="!canUndo" @click="undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-5-5 5-5"/><path d="M20 20a8 8 0 0 0-8-8H4"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 6H4v5"/>
+                <path d="M20 18a8 8 0 0 0-8-8H6"/>
+              </svg>
             </button>
             <button class="btn-ghost" :class="{ 'opacity-50 pointer-events-none': !canRedo }" :disabled="!canRedo" @click="redo" title="Redo (Ctrl+Y or Shift+Ctrl/Cmd+Z)" aria-label="Redo">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l5 5-5 5"/><path d="M4 20a8 8 0 0 1 8-8h8"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 6h5v5"/>
+                <path d="M4 18a8 8 0 0 1 8-8h4"/>
+              </svg>
             </button>
           </div>
         </div>
@@ -77,14 +108,17 @@
               <div class="flex gap-3 h-full overflow-x-auto snap-x snap-mandatory px-3 pb-3 pt-3">
                 <!-- List card -->
                 <div
-                  v-for="list in lists"
+                  v-for="list in listsForCurrentView"
                   :key="list.id"
                   class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col list-card list-element"
                   :class="cardWidth"
                 >
               <!-- header (ellipsis opens actions) -->
-              <div class="list-header flex items-center justify-between mb-2">
-                <h2 class="font-semibold truncate ml-2 md:ml-3">{{ list.title }}</h2>
+              <div class="list-header flex items-center justify-between mb-2" :id="'anchor-list-'+list.id">
+                <h2 class="font-semibold truncate ml-2 md:ml-3">
+                  <span v-if="ui.inlineEditKey !== ('list-' + list.id)" class="cursor-text" @click.stop="startInlineEditList(list, $event)">{{ list.title }}</span>
+                  <input v-else :id="'edit-input-list-'+list.id" class="inline-edit" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
+                </h2>
                 <div class="relative">
                   <button class="btn-ghost no-hover" @click.stop="toggleListActions(list.id, $event)" aria-label="List actions">
                     <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
@@ -92,15 +126,15 @@
                   <div
                     v-if="ui.listActionsId===list.id"
                     :id="'menu-list-'+list.id"
-                    class="menu-pop right"
+                    class="menu-pop left"
                     :class="ui.menuDir['list-'+list.id] === 'up' ? 'up' : 'down'"
                   >
                     <template v-if="ui.menuDir['list-'+list.id] === 'up'">
                       <button class="menu-item danger" @click="removeList(list.id)">Delete</button>
-                      <button class="menu-item" @click="renameList(list)">Edit</button>
+                      
                     </template>
                     <template v-else>
-                      <button class="menu-item" @click="renameList(list)">Edit</button>
+                      
                       <button class="menu-item danger" @click="removeList(list.id)">Delete</button>
                     </template>
                   </div>
@@ -119,6 +153,7 @@
                 <li
                   v-for="(t, ti) in list.tasks"
                   :key="t.id"
+                  :id="'anchor-task-'+t.id"
                   class="group relative flex items-center gap-2 px-2 py-1 task-item snap-start cursor-pointer"
                   :class="[ t.fromFlowId ? 'flow-task' : '', ui.completing[t.id] ? 'completing' : '', taskDnDClass(list, t, ti) ]"
                   draggable="true"
@@ -131,19 +166,20 @@
                   
 
                   <!-- title in the middle -->
-                  <span class="flex-1 order-2 text-left leading-tight truncate">{{ t.title }}</span>
+                        <span v-if="ui.inlineEditKey !== ('task-' + list.id + '-' + t.id)" class="flex-1 order-2 text-left leading-tight truncate cursor-text" @click.stop="startInlineEditTask(list, t, $event)">{{ t.title }}</span>
+                        <input v-else :id="'edit-input-task-'+list.id+'-'+t.id" class="flex-1 order-2 text-left leading-tight truncate bg-transparent border border-div rounded px-2 py-1" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
 
                   <!-- checkbox on the right -->
                   <input class="order-3" type="checkbox" :checked="false" :disabled="ui.completing[t.id]" @click.stop @change="completeTask(list, t, $event)" />
 
                   <!-- task row actions menu (opens on row click) -->
-                  <div v-if="ui.taskActionsId===t.id" :id="'menu-task-'+t.id" class="menu-pop right" :class="ui.menuDir['task-'+t.id] === 'up' ? 'up' : 'down'">
+                  <div v-if="ui.taskActionsId===t.id" :id="'menu-task-'+t.id" class="menu-pop left" :class="ui.menuDir['task-'+t.id] === 'up' ? 'up' : 'down'">
                     <template v-if="ui.menuDir['task-'+t.id] === 'up'">
                       <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
-                      <button class="menu-item" @click="editTask(list, t)">Edit</button>
+                      
                     </template>
                     <template v-else>
-                      <button class="menu-item" @click="editTask(list, t)">Edit</button>
+                      
                       <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
                     </template>
                   </div>
@@ -233,25 +269,28 @@
             <section class="h-full">
               <div class="flex gap-3 h-full overflow-x-auto snap-x snap-mandatory px-3 pb-3 pt-3">
                 <div
-                  v-for="flow in flows"
+                  v-for="flow in flowsForCurrentView"
                   :key="flow.id"
                   class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col"
                   :class="cardWidth"
                 >
                   <!-- flow header -->
-                  <div class="flex items-center justify-between mb-2">
-                    <h2 class="font-semibold truncate">{{ flow.title }}</h2>
+                  <div class="flex items-center justify-between mb-2" :id="'anchor-flow-'+flow.id">
+                    <h2 class="font-semibold truncate">
+                      <span v-if="ui.inlineEditKey !== ('flow-' + flow.id)" class="cursor-text" @click.stop="startInlineEditFlow(flow, $event)">{{ flow.title }}</span>
+                      <input v-else :id="'edit-input-flow-'+flow.id" class="inline-edit" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
+                    </h2>
                     <div class="relative">
                       <button class="btn-ghost no-hover" @click.stop="toggleFlowActions(flow.id, $event)" aria-label="Flow actions">
                         <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                       </button>
-                      <div v-if="ui.flowActionsId===flow.id" :id="'menu-flow-'+flow.id" class="menu-pop right" :class="ui.menuDir['flow-'+flow.id] === 'up' ? 'up' : 'down'">
+                      <div v-if="ui.flowActionsId===flow.id" :id="'menu-flow-'+flow.id" class="menu-pop left" :class="ui.menuDir['flow-'+flow.id] === 'up' ? 'up' : 'down'">
                         <template v-if="ui.menuDir['flow-'+flow.id] === 'up'">
                           <button class="menu-item danger" @click="removeFlow(flow.id)">Delete</button>
-                          <button class="menu-item" @click="renameFlow(flow)">Edit</button>
+                          
                         </template>
                         <template v-else>
-                          <button class="menu-item" @click="renameFlow(flow)">Edit</button>
+                          
                           <button class="menu-item danger" @click="removeFlow(flow.id)">Delete</button>
                         </template>
                       </div>
@@ -263,17 +302,17 @@
                     <div v-for="(step, idx) in flow.steps" :key="step.id" class="elev rounded-lg p-2 transition">
                       <div class="flex items-center justify-between mb-2">
                         <div class="text-xs text-sec">Step {{ idx+1 }} — type: single</div>
-                        <div class="relative">
+                        <div class="relative" :id="'anchor-steptask-'+step.id">
                           <button class="btn-ghost no-hover" @click.stop="toggleStepActions(step.id, $event)" aria-label="Step actions">
                             <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                           </button>
-                          <div v-if="ui.stepActionsId===step.id" :id="'menu-step-'+step.id" class="menu-pop right" :class="ui.menuDir['step-'+step.id] === 'up' ? 'up' : 'down'">
+                          <div v-if="ui.stepActionsId===step.id" :id="'menu-step-'+step.id" class="menu-pop left" :class="ui.menuDir['step-'+step.id] === 'up' ? 'up' : 'down'">
                             <template v-if="ui.menuDir['step-'+step.id] === 'up'">
                               <button class="menu-item danger" @click="deleteStep(flow, step.id)">Delete</button>
-                              <button class="menu-item" @click="renameStep(step)">Edit</button>
+                              
                             </template>
                             <template v-else>
-                              <button class="menu-item" @click="renameStep(step)">Edit</button>
+                              
                               <button class="menu-item danger" @click="deleteStep(flow, step.id)">Delete</button>
                             </template>
                           </div>
@@ -287,19 +326,20 @@
                         </button>
                       </div>
                       <div v-else class="flex items-center gap-2">
-                        <span class="flex-1 px-2 py-1 border border-div rounded">{{ step.taskTitle }}</span>
+                        <span v-if="ui.inlineEditKey !== ('steptask-' + flow.id + '-' + step.id)" class="flex-1 px-2 py-1 border border-div rounded cursor-text" @click.stop="startInlineEditStepTask(flow, step, $event)">{{ step.taskTitle }}</span>
+                        <input v-else :id="'edit-input-steptask-'+flow.id+'-'+step.id" class="flex-1 px-2 py-1 border border-div rounded bg-transparent" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
                         <!-- task actions in step -->
                         <div class="relative">
                           <button class="btn-ghost no-hover" @click.stop="toggleStepTaskActions(step.id, $event)" aria-label="Step task actions">
                             <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                           </button>
-                          <div v-if="ui.stepTaskActionsId===step.id" :id="'menu-steptask-'+step.id" class="menu-pop right" :class="ui.menuDir['steptask-'+step.id] === 'up' ? 'up' : 'down'">
+                          <div v-if="ui.stepTaskActionsId===step.id" :id="'menu-steptask-'+step.id" class="menu-pop left" :class="ui.menuDir['steptask-'+step.id] === 'up' ? 'up' : 'down'">
                             <template v-if="ui.menuDir['steptask-'+step.id] === 'up'">
                               <button class="menu-item danger" @click="removeStepTask(step)">Delete</button>
-                              <button class="menu-item" @click="renameStepTask(step)">Edit</button>
+                              
                             </template>
                             <template v-else>
-                              <button class="menu-item" @click="renameStepTask(step)">Edit</button>
+                              
                               <button class="menu-item danger" @click="removeStepTask(step)">Delete</button>
                             </template>
                           </div>
@@ -419,6 +459,11 @@ export default {
       tab: 'lists', // 'lists' | 'flows' | 'history' | 'settings' | 'stats'
       lists: [],
       flows: [],
+      // Views for lists and flows
+      listViews: [], // [{id,name,listIds:[] }]
+      flowViews: [], // [{id,name,flowIds:[] }]
+      currentListViewId: '',
+      currentFlowViewId: '',
       history: {}, // { [listId]: [{id,title,completedAt,fromFlowId,stepIndex,action?: 'completed'|'deleted'}] }
       listTitles: {}, // { [listId]: title } - persists names for deleted lists
       ui: {
@@ -443,6 +488,15 @@ export default {
         // history stacks
         undoStack: [],
         redoStack: [],
+        // view menus
+        listViewMenuOpen: false,
+        flowViewMenuOpen: false,
+        listViewEditName: '',
+        flowViewEditName: '',
+        listViewNameEditing: false,
+        flowViewNameEditing: false,
+        inlineEditKey: null,
+        inlineEditValue: '',
       }
     };
   },
@@ -469,6 +523,20 @@ export default {
       (this.lists || []).forEach(l => ids.add(l.id));
       return Array.from(ids);
     },
+    listViewName() { return (this.listViews.find(v=>v.id===this.currentListViewId)?.name) || 'Home'; },
+    flowViewName() { return (this.flowViews.find(v=>v.id===this.currentFlowViewId)?.name) || 'Home'; },
+    listsForCurrentView() {
+      const v = this.listViews.find(x=>x.id===this.currentListViewId);
+      if (!v) return this.lists;
+      const set = new Set(v.listIds||[]);
+      return this.lists.filter(l=>set.has(l.id));
+    },
+    flowsForCurrentView() {
+      const v = this.flowViews.find(x=>x.id===this.currentFlowViewId);
+      if (!v) return this.flows;
+      const set = new Set(v.flowIds||[]);
+      return this.flows.filter(f=>set.has(f.id));
+    },
     canUndo() { return (this.ui.undoStack?.length || 0) > 0; },
     canRedo() { return (this.ui.redoStack?.length || 0) > 0; },
   },
@@ -476,13 +544,18 @@ export default {
   created() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const { lists, flows, history, listTitles } = JSON.parse(raw);
+      const { lists, flows, history, listTitles, listViews, flowViews, currentListViewId, currentFlowViewId } = JSON.parse(raw);
       this.lists = lists || [];
       this.flows = flows || [];
       this.history = history || {};
       // reconstruct or use stored titles
       this.listTitles = listTitles || {};
       this.lists.forEach(l => { if (!this.listTitles[l.id]) this.listTitles[l.id] = l.title; });
+      this.listViews = Array.isArray(listViews) ? listViews : [];
+      this.flowViews = Array.isArray(flowViews) ? flowViews : [];
+      this.currentListViewId = currentListViewId || '';
+      this.currentFlowViewId = currentFlowViewId || '';
+      this.ensureDefaultViews();
     } else {
       const f1 = {
         id: uid(),
@@ -497,6 +570,7 @@ export default {
       this.lists = [initialList];
       this.listTitles[initialList.id] = initialList.title;
       this.history = {};
+      this.ensureDefaultViews();
       this.save();
     }
   },
@@ -551,6 +625,10 @@ export default {
     flows: { deep: true, handler() { this.save(); } },
     history: { deep: true, handler() { this.save(); } },
     listTitles: { deep: true, handler() { this.save(); } },
+    listViews: { deep: true, handler() { this.save(); } },
+    flowViews: { deep: true, handler() { this.save(); } },
+    currentListViewId() { this.save(); },
+    currentFlowViewId() { this.save(); },
     tab(newVal) {
       // Recalculate list heights when switching back to Lists
       if (newVal === 'lists') this.$nextTick(this.updateListHeights);
@@ -558,6 +636,123 @@ export default {
   },
 
   methods: {
+    /* --- Views management --- */
+    ensureDefaultViews() {
+      try {
+        if (!Array.isArray(this.listViews) || this.listViews.length === 0) {
+          const v = { id: uid(), name: 'Home', listIds: (this.lists||[]).map(l=>l.id) };
+          this.listViews = [v];
+          this.currentListViewId = v.id;
+        } else if (!this.currentListViewId || !this.listViews.some(v=>v.id===this.currentListViewId)) {
+          this.currentListViewId = this.listViews[0].id;
+        }
+        if (!Array.isArray(this.flowViews) || this.flowViews.length === 0) {
+          const v2 = { id: uid(), name: 'Home', flowIds: (this.flows||[]).map(f=>f.id) };
+          this.flowViews = [v2];
+          this.currentFlowViewId = v2.id;
+        } else if (!this.currentFlowViewId || !this.flowViews.some(v=>v.id===this.currentFlowViewId)) {
+          this.currentFlowViewId = this.flowViews[0].id;
+        }
+      } catch {}
+    },
+    saveListViewName(){
+      try {
+        const v = this.listViews.find(x=>x.id===this.currentListViewId);
+        if (!v) return; const name = (this.ui.listViewEditName||'').trim();
+        if (!name) { this.ui.listViewNameEditing = false; return; }
+        this.mutate('renameListView', ()=>{ v.name = name; });
+        this.ui.listViewNameEditing = false;
+      } catch {}
+    },
+    saveFlowViewName(){
+      try {
+        const v = this.flowViews.find(x=>x.id===this.currentFlowViewId);
+        if (!v) return; const name = (this.ui.flowViewEditName||'').trim();
+        if (!name) { this.ui.flowViewNameEditing = false; return; }
+        this.mutate('renameFlowView', ()=>{ v.name = name; });
+        this.ui.flowViewNameEditing = false;
+      } catch {}
+    },
+    startEditListViewName(ev){
+      this.ui.listViewNameEditing = true; this.ui.listViewEditName = this.listViewName;
+      this.ui.listViewMenuOpen = true;
+      this.$nextTick(()=>{ try { this.$refs.listViewNameInput?.focus(); } catch {} this.decideMenuDir('listview', ev); });
+    },
+    cancelListViewName(){ this.ui.listViewNameEditing = false; },
+    startEditFlowViewName(ev){
+      this.ui.flowViewNameEditing = true; this.ui.flowViewEditName = this.flowViewName;
+      this.ui.flowViewMenuOpen = true;
+      this.$nextTick(()=>{ try { this.$refs.flowViewNameInput?.focus(); } catch {} this.decideMenuDir('flowview', ev); });
+    },
+    cancelFlowViewName(){ this.ui.flowViewNameEditing = false; },
+
+    /* Inline edit across entities */
+    startInlineEditList(list, ev){
+      this.ui.inlineEditKey = 'list-' + list.id;
+      this.ui.inlineEditValue = list.title;
+      this.ui.listActionsId = list.id;
+      this.$nextTick(()=>{ try { document.getElementById('edit-input-list-'+list.id)?.focus(); } catch {} this.decideMenuDir('list-'+list.id, ev); });
+    },
+    startInlineEditFlow(flow, ev){
+      this.ui.inlineEditKey = 'flow-' + flow.id;
+      this.ui.inlineEditValue = flow.title;
+      this.ui.flowActionsId = flow.id;
+      this.$nextTick(()=>{ try { document.getElementById('edit-input-flow-'+flow.id)?.focus(); } catch {} this.decideMenuDir('flow-'+flow.id, ev); });
+    },
+    startInlineEditTask(list, t, ev){
+      this.ui.inlineEditKey = 'task-' + list.id + '-' + t.id;
+      this.ui.inlineEditValue = t.title;
+      this.ui.taskActionsId = t.id;
+      this.$nextTick(()=>{ try { document.getElementById('edit-input-task-'+list.id+'-'+t.id)?.focus(); } catch {} this.decideMenuDir('task-'+t.id, ev); });
+    },
+    startInlineEditStepTask(flow, step, ev){
+      this.ui.inlineEditKey = 'steptask-' + flow.id + '-' + step.id;
+      this.ui.inlineEditValue = step.taskTitle || '';
+      this.ui.stepTaskActionsId = step.id;
+      this.$nextTick(()=>{ try { document.getElementById('edit-input-steptask-'+flow.id+'-'+step.id)?.focus(); } catch {} this.decideMenuDir('steptask-'+step.id, ev); });
+    },
+    saveInlineEdit(){
+      const key = this.ui.inlineEditKey; if (!key) return;
+      const val = (this.ui.inlineEditValue||'').trim(); if (!val) { this.cancelInlineEdit(); return; }
+      const parts = key.split('-'); const kind = parts[0];
+      this.mutate('inlineEdit', ()=>{
+        if (kind==='list') {
+          const id = parts[1]; const l = this.lists.find(x=>x.id===id); if (l) { l.title = val; this.listTitles[id] = val; }
+        } else if (kind==='flow') {
+          const id = parts[1]; const f = this.flows.find(x=>x.id===id); if (f) f.title = val;
+        } else if (kind==='task') {
+          const lid = parts[1], tid = parts[2];
+          const l = this.lists.find(x=>x.id===lid); if (l) { const tt = l.tasks.find(x=>x.id===tid); if (tt) tt.title = val; }
+        } else if (kind==='steptask') {
+          const fid = parts[1], sid = parts[2];
+          const f = this.flows.find(x=>x.id===fid); if (f) { const st = (f.steps||[]).find(s=>s.id===sid); if (st) st.taskTitle = val; }
+        }
+      });
+      this.ui.inlineEditKey = null; this.ui.inlineEditValue = '';
+    },
+    cancelInlineEdit(){ this.ui.inlineEditKey = null; this.ui.inlineEditValue = ''; },
+    switchListView(id){ this.mutate('switchListView', ()=>{ this.currentListViewId = id; this.ui.listViewMenuOpen=false; }); },
+    switchFlowView(id){ this.mutate('switchFlowView', ()=>{ this.currentFlowViewId = id; this.ui.flowViewMenuOpen=false; }); },
+    addListView(){
+      const name = prompt('New view name?', 'New View'); if (!name) return;
+      this.mutate('addListView', ()=>{
+        const cur = this.listViews.find(v=>v.id===this.currentListViewId);
+        const ids = cur ? [...(cur.listIds||[])] : (this.lists||[]).map(l=>l.id);
+        const v = { id: uid(), name: name.trim()||'New View', listIds: ids };
+        this.listViews.push(v); this.currentListViewId = v.id;
+        this.ui.listViewMenuOpen=false;
+      });
+    },
+    addFlowView(){
+      const name = prompt('New flow view name?', 'New View'); if (!name) return;
+      this.mutate('addFlowView', ()=>{
+        const cur = this.flowViews.find(v=>v.id===this.currentFlowViewId);
+        const ids = cur ? [...(cur.flowIds||[])] : (this.flows||[]).map(f=>f.id);
+        const v = { id: uid(), name: name.trim()||'New View', flowIds: ids };
+        this.flowViews.push(v); this.currentFlowViewId = v.id;
+        this.ui.flowViewMenuOpen=false;
+      });
+    },
     /* --- Undo/Redo core --- */
     _deepClone(obj){ try { return JSON.parse(JSON.stringify(obj)); } catch { return obj; } },
     pushUndo(label='') {
@@ -567,6 +762,10 @@ export default {
           flows: this._deepClone(this.flows),
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
+          listViews: this._deepClone(this.listViews),
+          flowViews: this._deepClone(this.flowViews),
+          currentListViewId: this.currentListViewId,
+          currentFlowViewId: this.currentFlowViewId,
           label,
           ts: Date.now(),
         };
@@ -582,6 +781,10 @@ export default {
         this.flows = this._deepClone(snap.flows || []);
         this.history = this._deepClone(snap.history || {});
         this.listTitles = this._deepClone(snap.listTitles || {});
+        if (snap.listViews) this.listViews = this._deepClone(snap.listViews);
+        if (snap.flowViews) this.flowViews = this._deepClone(snap.flowViews);
+        if (snap.currentListViewId) this.currentListViewId = snap.currentListViewId;
+        if (snap.currentFlowViewId) this.currentFlowViewId = snap.currentFlowViewId;
         this.$nextTick(this.updateListHeights);
       } catch {}
     },
@@ -594,6 +797,10 @@ export default {
           flows: this._deepClone(this.flows),
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
+          listViews: this._deepClone(this.listViews),
+          flowViews: this._deepClone(this.flowViews),
+          currentListViewId: this.currentListViewId,
+          currentFlowViewId: this.currentFlowViewId,
           label: 'redo', ts: Date.now()
         };
         this.ui.redoStack.push(cur);
@@ -609,6 +816,10 @@ export default {
           flows: this._deepClone(this.flows),
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
+          listViews: this._deepClone(this.listViews),
+          flowViews: this._deepClone(this.flowViews),
+          currentListViewId: this.currentListViewId,
+          currentFlowViewId: this.currentFlowViewId,
           label: 'undo', ts: Date.now()
         };
         this.ui.undoStack.push(cur);
@@ -643,6 +854,9 @@ export default {
             list = { id: lid, title, tasks: [] };
             this.lists.push(list);
             this.listTitles[lid] = title;
+            // add to current list view membership
+            const v = this.listViews.find(x=>x.id===this.currentListViewId);
+            if (v && !v.listIds?.includes(list.id)) { (v.listIds||(v.listIds=[])).push(list.id); }
           }
           if (!this.listTitles[lid]) this.listTitles[lid] = list.title;
           const exists = list.tasks.some(t=>t.id===h.id);
@@ -913,7 +1127,8 @@ export default {
         const closeIfOutside = (key, selector)=>{
           const id = this.ui[key]; if(!id) return;
           const el = document.getElementById('menu-'+selector+id);
-          if (el && !(el===t || el.contains(t))) this.ui[key]=null;
+          const anchor = document.getElementById('anchor-'+selector+id);
+          if (el && !(el===t || el.contains(t) || (anchor && (anchor===t || anchor.contains(t))))) this.ui[key]=null;
         };
         closeIfOutside('listActionsId','list-');
         closeIfOutside('flowActionsId','flow-');
@@ -921,11 +1136,29 @@ export default {
         closeIfOutside('stepTaskActionsId','steptask-');
         closeIfOutside('taskActionsId','task-');
         closeIfOutside('historyActionsKey','history-');
+        // close view menus if clicked outside
+        try {
+          const lv = document.getElementById('menu-listview');
+          const la = document.getElementById('anchor-listview');
+          if (this.ui.listViewMenuOpen && lv && !(lv===t || lv.contains(t) || (la && (la===t || la.contains(t))))) this.ui.listViewMenuOpen = false;
+        } catch {}
+        try {
+          const fv = document.getElementById('menu-flowview');
+          const fa = document.getElementById('anchor-flowview');
+          if (this.ui.flowViewMenuOpen && fv && !(fv===t || fv.contains(t) || (fa && (fa===t || fa.contains(t))))) this.ui.flowViewMenuOpen = false;
+        } catch {}
       } catch {}
     },
     save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        lists: this.lists, flows: this.flows, history: this.history, listTitles: this.listTitles,
+        lists: this.lists,
+        flows: this.flows,
+        history: this.history,
+        listTitles: this.listTitles,
+        listViews: this.listViews,
+        flowViews: this.flowViews,
+        currentListViewId: this.currentListViewId,
+        currentFlowViewId: this.currentFlowViewId,
       }));
     },
     tabBtn(n) { return this.tab===n ? 'active font-semibold' : ''; },
@@ -946,6 +1179,8 @@ export default {
       this.ui.listActionsId = this.ui.flowActionsId = this.ui.stepActionsId =
         this.ui.stepTaskActionsId = this.ui.taskActionsId = null;
       this.ui.historyActionsKey = null;
+      this.ui.listViewMenuOpen = false;
+      this.ui.flowViewMenuOpen = false;
     },
     toggleAddMenu(id){
       const opening = this.ui.listAddMenuId !== id;
@@ -998,6 +1233,40 @@ export default {
       const id = t.id;
       this.ui.taskActionsId = this.ui.taskActionsId===id ? null : id;
       this.$nextTick(()=>this.decideMenuDir('task-'+id, ev));
+    },
+    toggleListViewMenu(ev){
+      const opening = !this.ui.listViewMenuOpen;
+      this.ui.listViewMenuOpen = opening;
+      this.ui.listViewEditName = this.listViewName || '';
+      if (opening) {
+        this.ui.listViewNameEditing = true;
+        this.$nextTick(()=>{ try { this.$refs.listViewNameInput?.focus(); this.$refs.listViewNameInput?.select(); } catch {} this.decideMenuDir('listview', ev); });
+      } else {
+        this.$nextTick(()=>this.decideMenuDir('listview', ev));
+      }
+    },
+    openListViewEditMenu(ev){
+      this.ui.listViewMenuOpen = true;
+      this.ui.listViewNameEditing = true;
+      this.ui.listViewEditName = this.listViewName || '';
+      this.$nextTick(()=>{ try { this.$refs.listViewNameInput?.focus(); } catch {} this.decideMenuDir('listview', ev); });
+    },
+    toggleFlowViewMenu(ev){
+      const opening = !this.ui.flowViewMenuOpen;
+      this.ui.flowViewMenuOpen = opening;
+      this.ui.flowViewEditName = this.flowViewName || '';
+      if (opening) {
+        this.ui.flowViewNameEditing = true;
+        this.$nextTick(()=>{ try { this.$refs.flowViewNameInput?.focus(); this.$refs.flowViewNameInput?.select(); } catch {} this.decideMenuDir('flowview', ev); });
+      } else {
+        this.$nextTick(()=>this.decideMenuDir('flowview', ev));
+      }
+    },
+    openFlowViewEditMenu(ev){
+      this.ui.flowViewMenuOpen = true;
+      this.ui.flowViewNameEditing = true;
+      this.ui.flowViewEditName = this.flowViewName || '';
+      this.$nextTick(()=>{ try { this.$refs.flowViewNameInput?.focus(); } catch {} this.decideMenuDir('flowview', ev); });
     },
     openHistoryMenu(lid, h, ev){
       const key = lid + '-' + h.id + '-' + (h.completedAt||0);
@@ -1062,20 +1331,22 @@ export default {
           list.tasks.forEach(t => {
             this.history[id].unshift({
               id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
-              stepIndex: t.stepIndex ?? null, completedAt: ts, action: 'deleted'
+              stepIndex: t.stepIndex ?? null, completedAt: ts, action: 'deleted', viewId: this.currentListViewId || null
             });
           });
           // If list has no tasks, ensure it still appears in history
           if (list.tasks.length === 0) {
-            this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted' });
+            this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted', viewId: this.currentListViewId || null });
           }
         } else {
           // ensure history array exists so list shows up
           this.history[id] = this.history[id] || [];
           const ts = Date.now();
-          this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted' });
+          this.history[id].unshift({ id: '__list_deleted__'+ts, title: 'List deleted', completedAt: ts, action: 'list-deleted', viewId: this.currentListViewId || null });
         }
         this.lists = this.lists.filter(l=>l.id!==id);
+        // remove from all views
+        this.listViews.forEach(v=>{ v.listIds = (v.listIds||[]).filter(x=>x!==id); });
         this.closeAllMenus();
       });
     },
@@ -1129,7 +1400,7 @@ export default {
             if (!this.history[list.id]) this.history[list.id] = [];
             this.history[list.id].unshift({
               id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
-              stepIndex: t.stepIndex ?? null, completedAt: Date.now(), action: 'deleted'
+              stepIndex: t.stepIndex ?? null, completedAt: Date.now(), action: 'deleted', viewId: this.currentListViewId || null
             });
           }
         } catch {}
@@ -1172,7 +1443,7 @@ export default {
         if (!this.history[list.id]) this.history[list.id] = [];
         this.history[list.id].unshift({
           id: task.id, title: task.title, fromFlowId: task.fromFlowId || null,
-          stepIndex: task.stepIndex ?? null, completedAt: Date.now(), action: 'completed'
+          stepIndex: task.stepIndex ?? null, completedAt: Date.now(), action: 'completed', viewId: this.currentListViewId || null
         });
         // remove from list
         list.tasks = list.tasks.filter(t=>t.id!==task.id);
@@ -1253,7 +1524,12 @@ export default {
     /* --- flows editor --- */
     addFlow() {
       const title = prompt('Flow title?'); if (!title) return;
-      this.mutate('addFlow', () => { this.flows.push({ id: uid(), title: title.trim(), steps: [] }); });
+      this.mutate('addFlow', () => {
+        const f = { id: uid(), title: title.trim(), steps: [] };
+        this.flows.push(f);
+        const v = this.flowViews.find(x=>x.id===this.currentFlowViewId);
+        if (v && !v.flowIds?.includes(f.id)) { (v.flowIds||(v.flowIds=[])).push(f.id); }
+      });
     },
     renameFlow(flow) {
       const v = prompt('Rename flow', flow.title); if (!v) return;
@@ -1261,7 +1537,11 @@ export default {
     },
     removeFlow(id) {
       if (!confirm('Delete this flow?')) return;
-      this.mutate('removeFlow', () => { this.flows = this.flows.filter(f=>f.id!==id); this.closeAllMenus(); });
+      this.mutate('removeFlow', () => {
+        this.flows = this.flows.filter(f=>f.id!==id);
+        this.flowViews.forEach(v=>{ v.flowIds = (v.flowIds||[]).filter(x=>x!==id); });
+        this.closeAllMenus();
+      });
     },
     addStep(flow) {
       const type = prompt('Step type (only "single" available)', 'single');

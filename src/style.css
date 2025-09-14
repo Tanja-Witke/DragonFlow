@@ -80,13 +80,20 @@
   .btn-ghost   { @apply px-2 py-1 rounded transition; color: var(--clr-text-2); cursor: pointer; }
   .btn-ghost:hover { background: color-mix(in oklab, var(--clr-elev) 92%, black 0%); }
   .btn-ghost:focus-visible { box-shadow: 0 0 0 2px var(--clr-focus); }
+  /* Inline title edit (header) */
+  .inline-edit { background: transparent; border: none; color: var(--clr-text); font: inherit; padding: 1px 4px; border-bottom: 1px dashed var(--clr-border); min-width: 3ch; }
+  .inline-edit:focus { outline: none; border-bottom-color: var(--clr-focus); }
 
   .field       { @apply w-full rounded px-2 py-1 outline-none; background: var(--clr-surface); color: var(--clr-text); }
 
   .menu-pop    { @apply absolute z-10 w-44 rounded-xl shadow-xl p-1; right: 0; background: var(--tone-medium); color: var(--clr-text); border: none; overflow: hidden; position: absolute; }
   /* Make inner button hovers bleed to the rounded edges */
-  .menu-pop { padding: 0; }
+  .menu-pop { padding: 0; z-index: 200; }
+  .menu-pop:focus { outline: none; }
+  /* Header topbar elevated above content so menus overlay */
+  .topbar { position: relative; z-index: 250; }
   .menu-pop .menu-item { width: 100%; display: block; }
+  .menu-pop .menu-item:focus, .menu-pop .menu-item:focus-visible { outline: none; box-shadow: none; }
   .menu-pop.down { top: calc(100% + 6px); }
   .menu-pop.up   { bottom: calc(100% + 6px); }
   .menu-pop.right { right: 0; }

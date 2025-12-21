@@ -95,9 +95,11 @@
   .menu-pop .menu-item { width: 100%; display: block; }
   .menu-pop .menu-item:focus, .menu-pop .menu-item:focus-visible { outline: none; box-shadow: none; }
   .menu-pop.down { top: calc(100% + 6px); }
-  .menu-pop.up   { bottom: calc(100% + 6px); }
-  .menu-pop.right { right: 0; }
-  .menu-pop.left { left: 0; right: auto; }
+.menu-pop.up   { bottom: calc(100% + 6px); }
+.menu-pop.right { right: 0; }
+.menu-pop.left { left: 0; right: auto; }
+.add-list-layer { position: fixed; inset: 0; z-index: 500; pointer-events: none; }
+.add-list-floating { width: 260px; padding: 1rem; z-index: 510; pointer-events: auto; }
   .menu-item   { @apply w-full text-left px-3 py-2; display:block; border-radius: 0; color: var(--clr-text-2); }
   .menu-item { cursor: pointer; }
   .menu-item:hover { background: var(--interactive-hover); color: var(--clr-text); }

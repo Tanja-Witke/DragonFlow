@@ -67,7 +67,6 @@
               </button>
               <div v-if="ui.listViewMenuOpen" id="menu-listview" class="menu-pop left" :class="ui.menuDir['listview'] === 'up' ? 'up' : 'down'">
                 <button v-for="v in listViews.filter(v=>v.id!==currentListViewId)" :key="v.id" class="menu-item" @click.stop="switchListView(v.id)">{{ v.name }}</button>
-                <div class="divider"></div>
                 <button class="menu-item" @click.stop="addListView">+ New View</button>
               </div>
             </div>
@@ -79,7 +78,6 @@
               </button>
               <div v-if="ui.flowViewMenuOpen" id="menu-flowview" class="menu-pop left" :class="ui.menuDir['flowview'] === 'up' ? 'up' : 'down'">
                 <button v-for="v in flowViews.filter(v=>v.id!==currentFlowViewId)" :key="v.id" class="menu-item" @click.stop="switchFlowView(v.id)">{{ v.name }}</button>
-                <div class="divider"></div>
                 <button class="menu-item" @click.stop="addFlowView">+ New View</button>
               </div>
             </div>
@@ -97,6 +95,26 @@
                 <path d="M4 18a8 8 0 0 1 8-8h4"/>
               </svg>
             </button>
+            <div class="relative" id="anchor-currentview">
+              <button class="btn-ghost no-hover" @click.stop="toggleCurrentViewMenu($event)" aria-label="Current view actions">
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+              </button>
+              <div v-if="ui.currentViewMenuOpen" id="menu-currentview" class="menu-pop right" :class="ui.menuDir['currentview'] === 'up' ? 'up' : 'down'">
+                <template v-if="(listViewName||'').toLowerCase()==='home'">
+                  <div class="menu-item text-muted cursor-default">Home view cannot be deleted</div>
+                </template>
+                <template v-else>
+                  <button v-if="!ui.currentViewDeleteConfirm" class="menu-item danger" @click.stop="openViewDeleteConfirm">Delete View</button>
+                  <div v-else class="space-y-2 px-2 pb-2">
+                    <div class="text-xs text-sec">Delete "{{ listViewName }}"?</div>
+                    <div class="flex justify-end gap-2">
+                      <button class="btn-outline text-xs" @click.stop="ui.currentViewDeleteConfirm=false">Cancel</button>
+                      <button class="btn-primary text-xs danger" ref="viewDeleteConfirmBtn" @click.stop="deleteCurrentView">Delete</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -108,38 +126,47 @@
               <div class="flex gap-3 h-full overflow-x-auto snap-x snap-mandatory px-3 pb-3 pt-3">
                 <!-- List card -->
                 <div
-                  v-for="list in listsForCurrentView"
+                  v-for="(list, idx) in listsForCurrentView"
                   :key="list.id"
                   class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col list-card list-element"
-                  :class="cardWidth"
+                  :class="[cardWidth, ui.draggingListId===list.id ? 'opacity-75' : '']"
+                  draggable="true"
+                  @dragstart="startListDrag(list, idx, $event)"
+                  @dragover.prevent="onListDragOverCard(list, idx, $event)"
+                  @drop.prevent="onListDrop(list, idx, $event)"
+                  @dragend="endListDrag"
                 >
               <!-- header (ellipsis opens actions) -->
-              <div class="list-header flex items-center justify-between mb-2" :id="'anchor-list-'+list.id">
-                <h2 class="font-semibold truncate ml-2 md:ml-3">
-                  <span v-if="ui.inlineEditKey !== ('list-' + list.id)" class="cursor-text" @click.stop="startInlineEditList(list, $event)">{{ list.title }}</span>
-                  <input v-else :id="'edit-input-list-'+list.id" class="inline-edit" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
-                </h2>
-                <div class="relative">
-                  <button class="btn-ghost no-hover" @click.stop="toggleListActions(list.id, $event)" aria-label="List actions">
-                    <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                  </button>
-                  <div
-                    v-if="ui.listActionsId===list.id"
-                    :id="'menu-list-'+list.id"
-                    class="menu-pop left"
-                    :class="ui.menuDir['list-'+list.id] === 'up' ? 'up' : 'down'"
-                  >
-                    <template v-if="ui.menuDir['list-'+list.id] === 'up'">
-                      <button class="menu-item danger" @click="removeList(list.id)">Delete</button>
-                      
-                    </template>
-                    <template v-else>
-                      
-                      <button class="menu-item danger" @click="removeList(list.id)">Delete</button>
-                    </template>
+                <div class="list-header flex items-center justify-between mb-2" :id="'anchor-list-'+list.id">
+                  <h2 class="font-semibold truncate ml-2 md:ml-3">
+                    <span v-if="ui.inlineEditKey !== ('list-' + list.id)" class="cursor-text" @click.stop="startInlineEditList(list, $event)">{{ list.title }}</span>
+                    <input v-else :id="'edit-input-list-'+list.id" class="inline-edit" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
+                  </h2>
+                  <div class="relative">
+                    <button class="btn-ghost no-hover" @click.stop="toggleListActions(list.id, $event)" aria-label="List actions">
+                      <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                    </button>
+                    <div
+                      v-if="ui.listActionsId===list.id"
+                      :id="'menu-list-'+list.id"
+                      class="menu-pop right"
+                      :class="ui.menuDir['list-'+list.id] === 'up' ? 'up' : 'down'"
+                    >
+                      <div v-if="ui.listDeleteConfirmId===list.id" class="space-y-2 px-2 pb-2">
+                        <div class="text-xs text-sec">Delete "{{ list.title }}"?</div>
+                        <div class="flex justify-end gap-2">
+                          <button class="btn-outline text-xs" @click.stop="cancelDeleteList">Cancel</button>
+                          <button
+                            class="btn-primary text-xs danger"
+                            :ref="'listDeleteConfirmBtn-'+list.id"
+                            @click.stop="confirmDeleteList(list.id)"
+                          >Delete</button>
+                        </div>
+                      </div>
+                      <button v-else class="menu-item danger" @click.stop="askDeleteList(list.id)">Delete</button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
               <!-- tasks area container (fills available height) -->
               <div class="task-area overflow-hidden">
@@ -247,23 +274,49 @@
             </div>
 
             <!-- add new list (full card size, subtle) -->
-            <button
-              class="relative snap-center shrink-0 muted-tile rounded-2xl shadow p-3 flex flex-col"
+            <div
+              id="anchor-newlist"
+              class="relative snap-center shrink-0"
               :class="cardWidth"
-              @click="addList"
-              title="Add list"
             >
-              <div class="flex-1 grid place-content-center text-muted hover:text-primary">
-                <div class="flex items-center gap-2">
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                  <span class="text-sm">New List</span>
+              <button
+                class="w-full h-full muted-tile rounded-2xl shadow p-3 flex flex-col"
+                @click="toggleNewListMenu($event)"
+                title="Add list"
+              >
+                <div class="flex-1 grid place-content-center text-muted hover:text-primary">
+                  <div class="flex items-center gap-2">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    <span class="text-sm">New List</span>
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+            </div>
           </div>
             </section>
+          <teleport to="body">
+            <div v-if="ui.newListMenuOpen" class="add-list-layer">
+              <div
+                id="menu-newlist"
+                class="menu-pop add-list-floating space-y-3"
+                :style="newListMenuStyle()"
+                @click.stop
+              >
+                <input
+                  ref="newListInput"
+                  v-model.trim="ui.newListTitle"
+                  class="field w-full"
+                  placeholder="e.g., Work"
+                  @keydown.enter.stop.prevent="createListFromInput"
+                />
+                <div class="flex justify-end gap-2">
+                  <button class="btn-outline text-sm" @click.stop="closeNewListMenu">Cancel</button>
+                  <button class="btn-primary text-sm" :disabled="!ui.newListTitle.trim()" @click.stop="createListFromInput">Create</button>
+                </div>
+              </div>
+            </div>
+          </teleport>
           </div>
-
           <!-- FLOWS TAB -->
           <div v-else-if="tab==='flows'" class="h-full">
             <section class="h-full">
@@ -471,6 +524,9 @@ export default {
         listAddMenuId: null,
         listAddMenuAbove: false,
         listAddMenuPos: { top: 0, left: 0 },
+        newListMenuOpen: false,
+        newListTitle: '',
+        newListMenuPos: { top: 0, left: 0 },
         selectedFlowId: '',
         addMode: 'task',
         newTaskTitle: '',
@@ -491,12 +547,17 @@ export default {
         // view menus
         listViewMenuOpen: false,
         flowViewMenuOpen: false,
+        currentViewMenuOpen: false,
+        currentViewDeleteConfirm: false,
         listViewEditName: '',
         flowViewEditName: '',
         listViewNameEditing: false,
         flowViewNameEditing: false,
         inlineEditKey: null,
         inlineEditValue: '',
+        draggingListId: null,
+        draggingListIndex: -1,
+        listDeleteConfirmId: null,
       }
     };
   },
@@ -526,10 +587,10 @@ export default {
     listViewName() { return (this.listViews.find(v=>v.id===this.currentListViewId)?.name) || 'Home'; },
     flowViewName() { return (this.flowViews.find(v=>v.id===this.currentFlowViewId)?.name) || 'Home'; },
     listsForCurrentView() {
-      const v = this.listViews.find(x=>x.id===this.currentListViewId);
-      if (!v) return this.lists;
-      const set = new Set(v.listIds||[]);
-      return this.lists.filter(l=>set.has(l.id));
+      const view = this.listViews.find(x=>x.id===this.currentListViewId);
+      const homeId = this.homeListViewId();
+      if (!view || view.id === homeId) return this.lists;
+      return (this.lists||[]).filter(l => (l.viewId || homeId) === view.id);
     },
     flowsForCurrentView() {
       const v = this.flowViews.find(x=>x.id===this.currentFlowViewId);
@@ -633,26 +694,90 @@ export default {
       // Recalculate list heights when switching back to Lists
       if (newVal === 'lists') this.$nextTick(this.updateListHeights);
     },
+    'ui.listActionsId'(val){
+      if (!val) this.ui.listDeleteConfirmId = null;
+    },
+    'ui.currentViewMenuOpen'(val){
+      if (!val) this.ui.currentViewDeleteConfirm = false;
+    },
   },
 
   methods: {
+    homeListViewId() {
+      return (this.listViews.find(v => (v.name || '').toLowerCase() === 'home')?.id) || (this.listViews[0]?.id || '');
+    },
+    syncListMembership() {
+      try {
+        const homeId = this.homeListViewId();
+        const map = new Map();
+        (this.listViews || []).forEach(v => {
+          if (!v) return;
+          v.listIds = [];
+          map.set(v.id, v);
+        });
+        (this.lists || []).forEach(list => {
+          if (!list) return;
+          if (!list.viewId || !map.has(list.viewId)) list.viewId = homeId;
+          map.get(list.viewId)?.listIds?.push(list.id);
+        });
+      } catch {}
+    },
     /* --- Views management --- */
     ensureDefaultViews() {
       try {
-        if (!Array.isArray(this.listViews) || this.listViews.length === 0) {
-          const v = { id: uid(), name: 'Home', listIds: (this.lists||[]).map(l=>l.id) };
-          this.listViews = [v];
-          this.currentListViewId = v.id;
-        } else if (!this.currentListViewId || !this.listViews.some(v=>v.id===this.currentListViewId)) {
-          this.currentListViewId = this.listViews[0].id;
-        }
-        if (!Array.isArray(this.flowViews) || this.flowViews.length === 0) {
-          const v2 = { id: uid(), name: 'Home', flowIds: (this.flows||[]).map(f=>f.id) };
-          this.flowViews = [v2];
-          this.currentFlowViewId = v2.id;
-        } else if (!this.currentFlowViewId || !this.flowViews.some(v=>v.id===this.currentFlowViewId)) {
-          this.currentFlowViewId = this.flowViews[0].id;
-        }
+        const normalizeListViews = () => {
+          let homeSeen = false;
+          const allIds = (this.lists||[]).map(l=>l.id);
+          const dedup = [];
+          const seenIds = new Set();
+          (Array.isArray(this.listViews) ? this.listViews : []).forEach(v=>{
+            if (!v || !v.id || seenIds.has(v.id)) return;
+            seenIds.add(v.id);
+            if (!Array.isArray(v.listIds)) v.listIds = [];
+            if ((v.name||'').toLowerCase() === 'home') {
+              if (homeSeen) return;
+              homeSeen = true;
+              v.listIds = allIds.slice();
+            }
+            dedup.push(v);
+          });
+          if (!homeSeen) {
+            dedup.unshift({ id: uid(), name: 'Home', listIds: allIds.slice() });
+            homeSeen = true;
+          }
+          this.listViews = dedup;
+          if (!this.currentListViewId || !this.listViews.some(v=>v.id===this.currentListViewId)) {
+            this.currentListViewId = this.listViews[0]?.id || '';
+          }
+          this.syncListMembership();
+        };
+        const normalizeFlowViews = () => {
+          let homeSeen = false;
+          const allIds = (this.flows||[]).map(f=>f.id);
+          const dedup = [];
+          const seenIds = new Set();
+          (Array.isArray(this.flowViews) ? this.flowViews : []).forEach(v=>{
+            if (!v || !v.id || seenIds.has(v.id)) return;
+            seenIds.add(v.id);
+            if (!Array.isArray(v.flowIds)) v.flowIds = [];
+            if ((v.name||'').toLowerCase() === 'home') {
+              if (homeSeen) return;
+              homeSeen = true;
+              v.flowIds = allIds.slice();
+            }
+            dedup.push(v);
+          });
+          if (!homeSeen) {
+            dedup.unshift({ id: uid(), name: 'Home', flowIds: allIds.slice() });
+            homeSeen = true;
+          }
+          this.flowViews = dedup;
+          if (!this.currentFlowViewId || !this.flowViews.some(v=>v.id===this.currentFlowViewId)) {
+            this.currentFlowViewId = this.flowViews[0]?.id || '';
+          }
+        };
+        normalizeListViews();
+        normalizeFlowViews();
       } catch {}
     },
     saveListViewName(){
@@ -736,9 +861,7 @@ export default {
     addListView(){
       const name = prompt('New view name?', 'New View'); if (!name) return;
       this.mutate('addListView', ()=>{
-        const cur = this.listViews.find(v=>v.id===this.currentListViewId);
-        const ids = cur ? [...(cur.listIds||[])] : (this.lists||[]).map(l=>l.id);
-        const v = { id: uid(), name: name.trim()||'New View', listIds: ids };
+        const v = { id: uid(), name: name.trim()||'New View', listIds: [] };
         this.listViews.push(v); this.currentListViewId = v.id;
         this.ui.listViewMenuOpen=false;
       });
@@ -746,9 +869,7 @@ export default {
     addFlowView(){
       const name = prompt('New flow view name?', 'New View'); if (!name) return;
       this.mutate('addFlowView', ()=>{
-        const cur = this.flowViews.find(v=>v.id===this.currentFlowViewId);
-        const ids = cur ? [...(cur.flowIds||[])] : (this.flows||[]).map(f=>f.id);
-        const v = { id: uid(), name: name.trim()||'New View', flowIds: ids };
+        const v = { id: uid(), name: name.trim()||'New View', flowIds: [] };
         this.flowViews.push(v); this.currentFlowViewId = v.id;
         this.ui.flowViewMenuOpen=false;
       });
@@ -1124,18 +1245,23 @@ export default {
           }
         }
         // Close action menus if click outside
-        const closeIfOutside = (key, selector)=>{
-          const id = this.ui[key]; if(!id) return;
-          const el = document.getElementById('menu-'+selector+id);
-          const anchor = document.getElementById('anchor-'+selector+id);
-          if (el && !(el===t || el.contains(t) || (anchor && (anchor===t || anchor.contains(t))))) this.ui[key]=null;
-        };
+    const closeIfOutside = (key, selector)=>{
+      const id = this.ui[key]; if(!id) return;
+      const el = document.getElementById('menu-'+selector+id);
+      const anchor = document.getElementById('anchor-'+selector+id);
+      if (el && !(el===t || el.contains(t) || (anchor && (anchor===t || anchor.contains(t))))) {
+        this.ui[key]=null;
+        if (key==='listActionsId') this.ui.listDeleteConfirmId = null;
+        if (key==='currentViewMenuOpen') this.ui.currentViewDeleteConfirm = false;
+      }
+    };
         closeIfOutside('listActionsId','list-');
         closeIfOutside('flowActionsId','flow-');
         closeIfOutside('stepActionsId','step-');
         closeIfOutside('stepTaskActionsId','steptask-');
         closeIfOutside('taskActionsId','task-');
         closeIfOutside('historyActionsKey','history-');
+        if (!this.ui.currentViewMenuOpen) this.ui.currentViewDeleteConfirm = false;
         // close view menus if clicked outside
         try {
           const lv = document.getElementById('menu-listview');
@@ -1146,6 +1272,19 @@ export default {
           const fv = document.getElementById('menu-flowview');
           const fa = document.getElementById('anchor-flowview');
           if (this.ui.flowViewMenuOpen && fv && !(fv===t || fv.contains(t) || (fa && (fa===t || fa.contains(t))))) this.ui.flowViewMenuOpen = false;
+        } catch {}
+        try {
+          const cv = document.getElementById('menu-currentview');
+          const ca = document.getElementById('anchor-currentview');
+          if (this.ui.currentViewMenuOpen && cv && !(cv===t || cv.contains(t) || (ca && (ca===t || ca.contains(t))))) {
+            this.ui.currentViewMenuOpen = false;
+            this.ui.currentViewDeleteConfirm = false;
+          }
+        } catch {}
+        try {
+          const nl = document.getElementById('menu-newlist');
+          const na = document.getElementById('anchor-newlist');
+          if (this.ui.newListMenuOpen && nl && !(nl===t || nl.contains(t) || (na && (na===t || na.contains(t))))) this.closeNewListMenu();
         } catch {}
       } catch {}
     },
@@ -1174,14 +1313,20 @@ export default {
     },
 
     /* --- menus --- */
-    closeAllMenus() {
-      this.ui.listAddMenuId = null; this.ui.selectedFlowId = '';
-      this.ui.listActionsId = this.ui.flowActionsId = this.ui.stepActionsId =
-        this.ui.stepTaskActionsId = this.ui.taskActionsId = null;
-      this.ui.historyActionsKey = null;
-      this.ui.listViewMenuOpen = false;
-      this.ui.flowViewMenuOpen = false;
-    },
+  closeAllMenus() {
+    this.ui.listAddMenuId = null; this.ui.selectedFlowId = '';
+    this.ui.listActionsId = this.ui.flowActionsId = this.ui.stepActionsId =
+      this.ui.stepTaskActionsId = this.ui.taskActionsId = null;
+    this.ui.historyActionsKey = null;
+    this.ui.listViewMenuOpen = false;
+    this.ui.flowViewMenuOpen = false;
+    this.ui.currentViewMenuOpen = false;
+    this.ui.currentViewDeleteConfirm = false;
+    this.ui.draggingListId = null;
+    this.ui.draggingListIndex = -1;
+    this.ui.listDeleteConfirmId = null;
+    this.closeNewListMenu();
+  },
     toggleAddMenu(id){
       const opening = this.ui.listAddMenuId !== id;
       this.ui.listAddMenuId = opening ? id : null;
@@ -1192,6 +1337,119 @@ export default {
       // default flow selection to first available
       this.ui.selectedFlowId = (this.flows[0] && this.flows[0].id) ? this.flows[0].id : '';
       this.$nextTick(() => this.decideAddMenuPlacement(id));
+    },
+    toggleNewListMenu(ev){
+      const opening = !this.ui.newListMenuOpen;
+      this.ui.newListMenuOpen = opening;
+      if (opening) {
+        this.ui.newListTitle = '';
+        try {
+          const anchor = ev?.currentTarget || document.getElementById('anchor-newlist');
+          const rect = anchor?.getBoundingClientRect();
+          if (rect) {
+            this.ui.newListMenuPos = {
+              top: rect.top + rect.height / 2,
+              left: rect.left + rect.width / 2,
+            };
+          } else {
+            this.ui.newListMenuPos = { top: window.innerHeight/2, left: window.innerWidth/2 };
+          }
+        } catch {
+          this.ui.newListMenuPos = { top: window.innerHeight/2, left: window.innerWidth/2 };
+        }
+        this.$nextTick(()=>{ try { this.$refs.newListInput?.focus(); } catch {} });
+      }
+    },
+    closeNewListMenu(){
+      this.ui.newListMenuOpen = false;
+      this.ui.newListTitle = '';
+    },
+    createListFromInput(){
+      const title = (this.ui.newListTitle || '').trim();
+      if (!title) return;
+      this.addList(title);
+    },
+    askDeleteList(id){
+      this.ui.listDeleteConfirmId = id;
+      this.$nextTick(()=>{ try { this.$refs['listDeleteConfirmBtn-'+id]?.focus(); } catch {} });
+    },
+    cancelDeleteList(){
+      this.ui.listDeleteConfirmId = null;
+    },
+    confirmDeleteList(id){
+      this.ui.listDeleteConfirmId = null;
+      this.ui.listActionsId = null;
+      this.removeList(id);
+    },
+    openViewDeleteConfirm(){
+      this.ui.currentViewDeleteConfirm = true;
+      this.$nextTick(()=>{ try { this.$refs.viewDeleteConfirmBtn?.focus(); } catch {} });
+    },
+    newListMenuStyle(){
+      const pos = this.ui.newListMenuPos || {};
+      const top = typeof pos.top === 'number' ? pos.top : window.innerHeight / 2;
+      const left = typeof pos.left === 'number' ? pos.left : window.innerWidth / 2;
+      return {
+        position: 'absolute',
+        top: top + 'px',
+        left: left + 'px',
+        transform: 'translate(-50%, -50%)'
+      };
+    },
+    toggleCurrentViewMenu(ev){
+      const opening = !this.ui.currentViewMenuOpen;
+      this.ui.currentViewMenuOpen = opening;
+      if (!opening) this.ui.currentViewDeleteConfirm = false;
+      this.$nextTick(()=>this.decideMenuDir('currentview', ev));
+    },
+    deleteCurrentView(){
+      const current = this.listViews.find(v=>v.id===this.currentListViewId);
+      if (!current || (current.name||'').toLowerCase() === 'home') {
+        this.ui.currentViewDeleteConfirm = false;
+        this.ui.currentViewMenuOpen = false;
+        return;
+      }
+      this.mutate('deleteListView', ()=>{
+        this.listViews = this.listViews.filter(v=>v.id!==current.id);
+        const homeId = this.homeListViewId();
+        (this.lists||[]).forEach(list=>{
+          if (list.viewId === current.id) list.viewId = homeId;
+        });
+        this.syncListMembership();
+        this.currentListViewId = homeId;
+      });
+      this.ui.currentViewDeleteConfirm = false;
+      this.ui.currentViewMenuOpen = false;
+    },
+    startListDrag(list, idx, ev){
+      try {
+        ev.dataTransfer?.setData('text/plain', list.id);
+        ev.dataTransfer?.setDragImage?.(ev.currentTarget, ev.offsetX, ev.offsetY);
+      } catch {}
+      this.ui.draggingListId = list.id;
+      this.ui.draggingListIndex = idx;
+    },
+    onListDragOverCard(list, idx, ev){
+      ev.preventDefault();
+    },
+    onListDrop(list, idx, ev){
+      ev.preventDefault();
+      const dragId = this.ui.draggingListId;
+      if (!dragId || dragId === list.id) return;
+      const fromIdx = this.lists.findIndex(l=>l.id===dragId);
+      const toIdx = this.lists.findIndex(l=>l.id===list.id);
+      if (fromIdx < 0 || toIdx < 0 || dragId === list.id) { this.endListDrag(); return; }
+      this.mutate('reorderLists', ()=>{
+        const moving = this.lists.splice(fromIdx,1)[0];
+        let insertIdx = this.lists.findIndex(l=>l.id===list.id);
+        if (insertIdx < 0) insertIdx = this.lists.length;
+        this.lists.splice(insertIdx,0,moving);
+      });
+      this.endListDrag();
+    },
+    endListDrag(){
+      this.ui.draggingListId = null;
+      this.ui.draggingListIndex = -1;
     },
     decideAddMenuPlacement(listId){
       try {
@@ -1224,7 +1482,12 @@ export default {
         zIndex: 60,
       };
     },
-    toggleListActions(id, ev){ this.ui.listActionsId = this.ui.listActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('list-'+id, ev)); },
+    toggleListActions(id, ev){
+      const opening = this.ui.listActionsId !== id;
+      this.ui.listActionsId = opening ? id : null;
+      if (!opening) this.ui.listDeleteConfirmId = null;
+      this.$nextTick(()=>this.decideMenuDir('list-'+id, ev));
+    },
     toggleFlowActions(id, ev){ this.ui.flowActionsId = this.ui.flowActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('flow-'+id, ev)); },
     toggleStepActions(id, ev){ this.ui.stepActionsId = this.ui.stepActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('step-'+id, ev)); },
     toggleStepTaskActions(id, ev){ this.ui.stepTaskActionsId = this.ui.stepTaskActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('steptask-'+id, ev)); },
@@ -1302,14 +1565,21 @@ export default {
     },
 
     /* --- lists --- */
-    addList() {
-      const title = prompt('List title?'); if (!title) return;
+    addList(title) {
+      const final = (title || '').trim();
+      if (!final) return;
       this.mutate('addList', () => {
-        const list = { id: uid(), title: title.trim(), tasks: [] };
+        const list = { id: uid(), title: final, tasks: [] };
         this.lists.push(list);
         this.listTitles[list.id] = list.title;
+        const view = this.listViews.find(v=>v.id===this.currentListViewId) || this.listViews[0];
+        if (view) {
+          if (!Array.isArray(view.listIds)) view.listIds = [];
+          if (!view.listIds.includes(list.id)) view.listIds.push(list.id);
+        }
         this.closeAllMenus();
       });
+      this.closeNewListMenu();
     },
     renameList(list) {
       const v = prompt('Rename list', list.title); if (!v) return;
@@ -1320,7 +1590,6 @@ export default {
       });
     },
     removeList(id) {
-      if (!confirm('Delete this list?')) return;
       this.mutate('removeList', () => {
         // keep history and title for deleted lists
         const list = this.lists.find(l=>l.id===id);

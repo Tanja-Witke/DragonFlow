@@ -23,11 +23,10 @@
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
               <span>History</span>
             </button>
-            <button class="menu-item w-full flex items-center gap-2" :class="{ 'is-active': tab==='flows' }" @click="openFromSide('flows')">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h12l-2-2M21 17H9l2 2"/></svg>
-              <span>Flows</span>
+            <button class="menu-item w-full flex items-center gap-2" :class="{ 'is-active': tab==='rules' }" @click="openFromSide('rules')">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h12"/><path d="M20 5v15.5a2 2 0 0 0-2.82 0L15 21.67l-2.18-2.18a2 2 0 0 0-2.82 0L8 21.67l-2.18-2.18a2 2 0 0 0-2.82 0"/></svg>
+              <span>Rules</span>
             </button>
-
             <div class="divider"></div>
 
             <button class="menu-item w-full flex items-center gap-2" :class="{ 'is-active': tab==='settings' }" @click="openFromSide('settings')">
@@ -53,33 +52,45 @@
             </button>
             <h1 class="text-lg font-semibold">
               <span v-if="tab==='lists'">Lists</span>
-              <span v-else-if="tab==='flows'">Flows</span>
               <span v-else-if="tab==='history'">History</span>
+              <span v-else-if="tab==='rules'">Rules</span>
               <span v-else-if="tab==='settings'">Settings</span>
               <span v-else>Statistics</span>
             </h1>
-            <!-- View switchers next to title -->
-            <div v-if="tab==='lists'" id="anchor-listview" class="relative">
-              <button class="btn-ghost" @click.stop="openListViewEditMenu($event)" title="Switch view" aria-label="Switch list view">
-                <span v-if="!ui.listViewNameEditing">{{ listViewName }}</span>
-                <input v-else ref="listViewNameInput" class="inline-edit" v-model.trim="ui.listViewEditName" @click.stop @keydown.enter.stop.prevent="saveListViewName" @keydown.esc.stop.prevent="cancelListViewName" @blur="saveListViewName" />
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-              </button>
-              <div v-if="ui.listViewMenuOpen" id="menu-listview" class="menu-pop left" :class="ui.menuDir['listview'] === 'up' ? 'up' : 'down'">
-                <button v-for="v in listViews.filter(v=>v.id!==currentListViewId)" :key="v.id" class="menu-item" @click.stop="switchListView(v.id)">{{ v.name }}</button>
-                <button class="menu-item" @click.stop="addListView">+ New View</button>
-              </div>
-            </div>
-            <div v-else-if="tab==='flows'" id="anchor-flowview" class="relative">
-              <button class="btn-ghost" @click.stop="openFlowViewEditMenu($event)" title="Switch view" aria-label="Switch flow view">
-                <span v-if="!ui.flowViewNameEditing">{{ flowViewName }}</span>
-                <input v-else ref="flowViewNameInput" class="inline-edit" v-model.trim="ui.flowViewEditName" @click.stop @keydown.enter.stop.prevent="saveFlowViewName" @keydown.esc.stop.prevent="cancelFlowViewName" @blur="saveFlowViewName" />
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-              </button>
-              <div v-if="ui.flowViewMenuOpen" id="menu-flowview" class="menu-pop left" :class="ui.menuDir['flowview'] === 'up' ? 'up' : 'down'">
-                <button v-for="v in flowViews.filter(v=>v.id!==currentFlowViewId)" :key="v.id" class="menu-item" @click.stop="switchFlowView(v.id)">{{ v.name }}</button>
-                <button class="menu-item" @click.stop="addFlowView">+ New View</button>
-              </div>
+            <div v-if="tab==='lists'" class="view-path flex items-center gap-1 text-sm">
+              <template v-if="ui.listViewNameEditing">
+                <div class="view-edit-inline flex items-center gap-1">
+                  <span v-if="ui.listViewEditPrefix" class="text-sec text-xs">{{ ui.listViewEditPrefix }}/</span>
+                  <input
+                    ref="listViewNameInput"
+                    class="inline-edit w-40"
+                    v-model.trim="ui.listViewEditName"
+                    @click.stop
+                    @keydown.enter.stop.prevent="saveListViewName"
+                    @keydown.esc.stop.prevent="cancelListViewName"
+                    @blur="saveListViewName"
+                  />
+                </div>
+              </template>
+              <template v-else>
+                <template v-for="(seg, idx) in viewPathSegments" :key="seg.path">
+                  <button
+                    v-if="idx===viewPathSegments.length-1"
+                    class="path-seg is-current"
+                    @click.stop="openListViewEditMenu($event)"
+                  >
+                    {{ seg.label }}
+                  </button>
+                  <button
+                    v-else
+                    class="path-seg"
+                    @click.stop="jumpToViewPath(seg.path)"
+                  >
+                    {{ seg.label }}
+                  </button>
+                  <span v-if="idx!==viewPathSegments.length-1" class="text-sec">/</span>
+                </template>
+              </template>
             </div>
           </div>
           <div class="flex items-center gap-1">
@@ -95,13 +106,28 @@
                 <path d="M4 18a8 8 0 0 1 8-8h4"/>
               </svg>
             </button>
+            <button class="btn-ghost" @click="exportWorkspace" title="Export data" aria-label="Export workspace">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14"/>
+                <path d="M5 12l7-7 7 7"/>
+                <path d="M5 19h14"/>
+              </svg>
+            </button>
+            <button class="btn-ghost" @click="triggerImportWorkspace" title="Import data" aria-label="Import workspace">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5"/>
+                <path d="M19 12l-7 7-7-7"/>
+                <path d="M5 5h14"/>
+              </svg>
+            </button>
+            <input ref="importInput" type="file" accept="application/json" class="hidden" @change="handleWorkspaceImport">
             <div class="relative" id="anchor-currentview">
               <button class="btn-ghost no-hover" @click.stop="toggleCurrentViewMenu($event)" aria-label="Current view actions">
                 <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
               </button>
               <div v-if="ui.currentViewMenuOpen" id="menu-currentview" class="menu-pop right" :class="ui.menuDir['currentview'] === 'up' ? 'up' : 'down'">
-                <template v-if="(listViewName||'').toLowerCase()==='home'">
-                  <div class="menu-item text-muted cursor-default">Home view cannot be deleted</div>
+                <template v-if="(listViewName||'').toLowerCase()==='main'">
+                  <div class="menu-item text-muted cursor-default">Main view cannot be deleted</div>
                 </template>
                 <template v-else>
                   <button v-if="!ui.currentViewDeleteConfirm" class="menu-item danger" @click.stop="openViewDeleteConfirm">Delete View</button>
@@ -123,7 +149,7 @@
           <!-- LISTS TAB -->
           <div v-if="tab==='lists'" class="h-full">
             <section class="h-full">
-              <div class="flex gap-3 h-full overflow-x-auto snap-x snap-mandatory px-3 pb-3 pt-3">
+              <div ref="listsScroller" class="flex gap-3 h-full overflow-x-auto snap-x snap-mandatory px-3 pb-3 pt-3">
                 <!-- List card -->
                 <div
                   v-for="(list, idx) in listsForCurrentView"
@@ -134,7 +160,7 @@
                   @dragstart="startListDrag(list, idx, $event)"
                   @dragover.prevent="onListDragOverCard(list, idx, $event)"
                   @drop.prevent="onListDrop(list, idx, $event)"
-                  @dragend="endListDrag"
+                  @dragend="endListDrag()"
                 >
               <!-- header (ellipsis opens actions) -->
                 <div class="list-header flex items-center justify-between mb-2" :id="'anchor-list-'+list.id">
@@ -170,106 +196,122 @@
 
               <!-- tasks area container (fills available height) -->
               <div class="task-area overflow-hidden">
-              <!-- tasks (active only) -->
               <ul
                 class="h-full overflow-y-auto overflow-x-hidden scrollbar-left pl-1 vlist list-scroll"
                 @scroll="onListScrollDeferred($event)"
-                @dragover.prevent="onListDragOver(list, $event)"
-                @drop="onListDrop(list, $event)"
+                @dragover.prevent="onTaskListDragOver(list, $event)"
+                @drop.prevent="onTaskListDrop(list, $event)"
               >
                 <li
                   v-for="(t, ti) in list.tasks"
                   :key="t.id"
                   :id="'anchor-task-'+t.id"
-                  class="group relative flex items-center gap-2 px-2 py-1 task-item snap-start cursor-pointer"
-                  :class="[ t.fromFlowId ? 'flow-task' : '', ui.completing[t.id] ? 'completing' : '', taskDnDClass(list, t, ti) ]"
+                  class="group relative flex gap-2 px-2 py-1 task-item snap-start cursor-pointer"
+                  :class="[
+                    t.type==='note' ? 'note-entry items-start' : 'items-center',
+                    isMilestone(t) ? 'milestone' : '',
+                    ui.completing[t.id] ? 'completing' : '',
+                    taskDnDClass(list, t, ti)
+                  ]"
                   draggable="true"
-                  @click.stop="onTaskRowClick(list, t, $event)"
                   @dragstart="onTaskDragStart(list, t, ti, $event)"
                   @dragend="onTaskDragEnd($event)"
                   @dragover.prevent.stop="onTaskDragOver(list, t, ti, $event)"
                   @drop.stop="onTaskDropOnItem(list, t, ti, $event)"
+                  @click.stop="onTaskRowClick(list, t, $event)"
                 >
-                  
-
-                  <!-- title in the middle -->
-                        <span v-if="ui.inlineEditKey !== ('task-' + list.id + '-' + t.id)" class="flex-1 order-2 text-left leading-tight truncate cursor-text" @click.stop="startInlineEditTask(list, t, $event)">{{ t.title }}</span>
-                        <input v-else :id="'edit-input-task-'+list.id+'-'+t.id" class="flex-1 order-2 text-left leading-tight truncate bg-transparent border border-div rounded px-2 py-1" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
-
-                  <!-- checkbox on the right -->
-                  <input class="order-3" type="checkbox" :checked="false" :disabled="ui.completing[t.id]" @click.stop @change="completeTask(list, t, $event)" />
-
-                  <!-- task row actions menu (opens on row click) -->
-                  <div v-if="ui.taskActionsId===t.id" :id="'menu-task-'+t.id" class="menu-pop left" :class="ui.menuDir['task-'+t.id] === 'up' ? 'up' : 'down'">
-                    <template v-if="ui.menuDir['task-'+t.id] === 'up'">
-                      <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
-                      
-                    </template>
-                    <template v-else>
-                      
-                      <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
-                    </template>
+                    <div class="flex-1 min-w-0" :class="t.type==='note' ? 'flex flex-col gap-1' : ''">
+                    <div v-if="t.type!=='note'" class="flex items-center gap-2 w-full">
+                      <span class="flex-1 text-left leading-tight">
+                        {{ linkedViewName(t) || t.title }}
+                      </span>
+                    </div>
+                    <div v-else class="note-body text-sec whitespace-pre-line text-left w-full">
+                      {{ t.body }}
+                    </div>
                   </div>
 
-                <!-- celebration overlay at task level -->
-                <div v-if="ui.celebrateTaskId===t.id" class="celebrate-overlay">
-                  <span v-for="n in 10" :key="'ray-'+t.id+'-'+n" class="ray" :style="rayStyle(n)"></span>
-                </div>
-                </li>
-              </ul>
+                  <div v-if="isMilestone(t)" class="milestone-check order-3" :title="milestonePercent(t) + '% complete'">
+                    <div class="faux-checkbox locked">
+                      <span class="milestone-percent">{{ milestonePercent(t) }}</span>
+                    </div>
+                  </div>
+                  <input
+                    v-else-if="t.type!=='note'"
+                    class="order-3"
+                    type="checkbox"
+                    :checked="false"
+                    :disabled="ui.completing[t.id]"
+                    @click.stop
+                    @change="completeTask(list, t, $event)"
+                  />
+
+                    <div v-if="ui.taskActionsId===t.id" :id="'menu-task-'+t.id" class="menu-pop left" :class="ui.menuDir['task-'+t.id] === 'up' ? 'up' : 'down'">
+                      <template v-if="ui.menuDir['task-'+t.id] === 'up'">
+                        <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
+                      </template>
+                      <template v-else>
+                        <button class="menu-item danger" @click="removeTask(list, t.id)">Delete</button>
+                      </template>
+                    </div>
+
+                    <div v-if="ui.celebrateTaskId===t.id" class="celebrate-overlay">
+                      <span v-for="n in 10" :key="'ray-'+t.id+'-'+n" class="ray" :style="rayStyle(n)"></span>
+                    </div>
+                  </li>
+                </ul>
               </div>
 
-              <!-- list footer: pinned to bottom of list element, always visible -->
               <div :id="'add-anchor-'+list.id" class="add-footer list-footer group px-2" @click="toggleAddMenu(list.id)">
                 <div class="new-btn">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                  <span>New</span>
+                  <span>Add</span>
                 </div>
 
-                <!-- anchored add menu (flush to button top edge) -->
-              <div
-                v-if="ui.listAddMenuId===list.id"
-                :id="'add-menu-'+list.id"
-                class="menu-fab full menu-up space-y-2"
-                @click.stop
-              >
+                <div
+                  v-if="ui.listAddMenuId===list.id"
+                  :id="'add-menu-'+list.id"
+                  class="menu-fab full menu-up space-y-2"
+                  @click.stop
+                >
+                  <div class="space-y-3">
+                    <div v-if="ui.addMode==='task'" class="space-y-2">
+                      <label class="block text-xs text-sec px-2">Task Title</label>
+                      <input
+                        v-model.trim="ui.newTaskTitle"
+                        :class="['field', ((ui.newTaskTitle||'').trim()===ui.placeholderSample) ? 'placeholder-active' : '']"
+                        @focus="onTaskTitleFocus"
+                        @blur="onTaskTitleBlur"
+                        @keydown.enter.stop.prevent="addTaskWithTitle(list)"
+                      />
+                    </div>
 
-                  <div v-if="ui.addMode==='task'" class="space-y-2">
-                    <label class="block text-xs text-sec px-2">Task Title</label>
-                    <input
-                      v-model.trim="ui.newTaskTitle"
-                      :class="['field', ((ui.newTaskTitle||'').trim()===ui.placeholderSample) ? 'placeholder-active' : '']"
-                      @focus="onTaskTitleFocus"
-                      @blur="onTaskTitleBlur"
-                    />
-                    <div class="flex items-center justify-between gap-2 px-1">
-                      <div class="flex gap-2">
-                        <button class="btn-outline" :class="ui.addMode==='task' ? 'is-active' : ''" @click.stop="setAddMode('task')">Task</button>
-                        <button class="btn-outline" :class="ui.addMode==='flow' ? 'is-active' : ''" @click.stop="setAddMode('flow')">Flow</button>
+                    <div v-else-if="ui.addMode==='note'" class="space-y-2">
+                      <label class="block text-xs text-sec px-2">Note Details</label>
+                      <textarea
+                        v-model.trim="ui.newNoteBody"
+                        class="field min-h-[90px]"
+                        rows="4"
+                        @focus="onNoteBodyFocus"
+                        @blur="onNoteBodyBlur"
+                      ></textarea>
+                    </div>
+
+                    <div v-else class="space-y-2 view-mode-panel">
+                      <div class="text-xs text-sec px-2">Open a view</div>
+                      <div class="view-tree-wrapper compact">
+                        <ViewTreeMenu :nodes="viewTree" :current-id="currentListViewId" @select="node => openViewFromTree(node, true)" />
                       </div>
-                      <div class="flex gap-2">
-                        <button class="btn-primary" :disabled="!ui.newTaskTitle" @click.stop="addTaskWithTitle(list)">Add Task</button>
-                      </div>
+                    </div>
+
+                    <div class="flex gap-2 px-1 add-mode-tabs items-center">
+                      <button class="btn-outline flex-1" :class="ui.addMode==='task' ? 'is-active' : ''" @click.stop="setAddMode('task')">Task</button>
+                      <button class="btn-outline flex-1" :class="ui.addMode==='note' ? 'is-active' : ''" @click.stop="setAddMode('note')">Note</button>
+                      <button class="btn-outline flex-1" :class="ui.addMode==='view' ? 'is-active' : ''" @click.stop="setAddMode('view')">View</button>
+                      <button class="btn-primary flex-1" :disabled="!canAddCurrent()" @click.stop="handleAdd(list)">Add</button>
                     </div>
                   </div>
-
-                  <div v-else class="space-y-2">
-                    <label class="block text-xs text-sec px-2">Choose Flow</label>
-                    <select v-model="ui.selectedFlowId" class="field">
-                      <option disabled value="">Choose a flow…</option>
-                      <option v-for="f in flows" :key="f.id" :value="f.id">{{ f.title }}</option>
-                    </select>
-                    <div class="flex items-center justify-between gap-2 px-1">
-                      <div class="flex gap-2">
-                        <button class="btn-outline" :class="ui.addMode==='task' ? 'is-active' : ''" @click.stop="setAddMode('task')">Task</button>
-                        <button class="btn-outline" :class="ui.addMode==='flow' ? 'is-active' : ''" @click.stop="setAddMode('flow')">Flow</button>
-                      </div>
-                      <div class="flex gap-2">
-                        <button class="btn-primary" :disabled="!ui.selectedFlowId" @click.stop="addFlowToList(list, ui.selectedFlowId)">Add Flow</button>
-                      </div>
-                    </div>
-              </div>
-            </div>
+                </div>
               </div>
             </div>
 
@@ -317,115 +359,6 @@
             </div>
           </teleport>
           </div>
-          <!-- FLOWS TAB -->
-          <div v-else-if="tab==='flows'" class="h-full">
-            <section class="h-full">
-              <div class="flex gap-3 h-full overflow-x-auto snap-x snap-mandatory px-3 pb-3 pt-3">
-                <div
-                  v-for="flow in flowsForCurrentView"
-                  :key="flow.id"
-                  class="relative snap-center shrink-0 surface rounded-2xl shadow p-3 flex flex-col"
-                  :class="cardWidth"
-                >
-                  <!-- flow header -->
-                  <div class="flex items-center justify-between mb-2" :id="'anchor-flow-'+flow.id">
-                    <h2 class="font-semibold truncate">
-                      <span v-if="ui.inlineEditKey !== ('flow-' + flow.id)" class="cursor-text" @click.stop="startInlineEditFlow(flow, $event)">{{ flow.title }}</span>
-                      <input v-else :id="'edit-input-flow-'+flow.id" class="inline-edit" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
-                    </h2>
-                    <div class="relative">
-                      <button class="btn-ghost no-hover" @click.stop="toggleFlowActions(flow.id, $event)" aria-label="Flow actions">
-                        <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                      </button>
-                      <div v-if="ui.flowActionsId===flow.id" :id="'menu-flow-'+flow.id" class="menu-pop left" :class="ui.menuDir['flow-'+flow.id] === 'up' ? 'up' : 'down'">
-                        <template v-if="ui.menuDir['flow-'+flow.id] === 'up'">
-                          <button class="menu-item danger" @click="removeFlow(flow.id)">Delete</button>
-                          
-                        </template>
-                        <template v-else>
-                          
-                          <button class="menu-item danger" @click="removeFlow(flow.id)">Delete</button>
-                        </template>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- steps -->
-                  <div class="flex-1 overflow-y-auto overflow-x-hidden scrollbar-left pl-1 space-y-3">
-                    <div v-for="(step, idx) in flow.steps" :key="step.id" class="elev rounded-lg p-2 transition">
-                      <div class="flex items-center justify-between mb-2">
-                        <div class="text-xs text-sec">Step {{ idx+1 }} — type: single</div>
-                        <div class="relative" :id="'anchor-steptask-'+step.id">
-                          <button class="btn-ghost no-hover" @click.stop="toggleStepActions(step.id, $event)" aria-label="Step actions">
-                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                          </button>
-                          <div v-if="ui.stepActionsId===step.id" :id="'menu-step-'+step.id" class="menu-pop left" :class="ui.menuDir['step-'+step.id] === 'up' ? 'up' : 'down'">
-                            <template v-if="ui.menuDir['step-'+step.id] === 'up'">
-                              <button class="menu-item danger" @click="deleteStep(flow, step.id)">Delete</button>
-                              
-                            </template>
-                            <template v-else>
-                              
-                              <button class="menu-item danger" @click="deleteStep(flow, step.id)">Delete</button>
-                            </template>
-                          </div>
-                        </div>
-                      </div>
-
-                      <!-- single-task area -->
-                      <div v-if="!step.taskTitle" class="flex justify-end">
-                        <button class="btn-primary" @click="addStepTask(step)">
-                          + Add task
-                        </button>
-                      </div>
-                      <div v-else class="flex items-center gap-2">
-                        <span v-if="ui.inlineEditKey !== ('steptask-' + flow.id + '-' + step.id)" class="flex-1 px-2 py-1 border border-div rounded cursor-text" @click.stop="startInlineEditStepTask(flow, step, $event)">{{ step.taskTitle }}</span>
-                        <input v-else :id="'edit-input-steptask-'+flow.id+'-'+step.id" class="flex-1 px-2 py-1 border border-div rounded bg-transparent" v-model.trim="ui.inlineEditValue" @click.stop @keydown.enter.stop.prevent="saveInlineEdit" @keydown.esc.stop.prevent="cancelInlineEdit" @blur="saveInlineEdit" />
-                        <!-- task actions in step -->
-                        <div class="relative">
-                          <button class="btn-ghost no-hover" @click.stop="toggleStepTaskActions(step.id, $event)" aria-label="Step task actions">
-                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                          </button>
-                          <div v-if="ui.stepTaskActionsId===step.id" :id="'menu-steptask-'+step.id" class="menu-pop left" :class="ui.menuDir['steptask-'+step.id] === 'up' ? 'up' : 'down'">
-                            <template v-if="ui.menuDir['steptask-'+step.id] === 'up'">
-                              <button class="menu-item danger" @click="removeStepTask(step)">Delete</button>
-                              
-                            </template>
-                            <template v-else>
-                              
-                              <button class="menu-item danger" @click="removeStepTask(step)">Delete</button>
-                            </template>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- add step -->
-                  <div class="absolute bottom-3 right-3">
-                    <button class="fab" @click="addStep(flow)" aria-label="Add step">
-                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- add new flow (full card size, subtle) -->
-                 <button
-                  class="relative snap-center shrink-0 muted-tile rounded-2xl shadow p-3 flex flex-col"
-                  :class="cardWidth"
-                  @click="addFlow"
-                >
-                  <div class="flex-1 grid place-content-center text-muted hover:text-primary">
-                    <div class="flex items-center gap-2">
-                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                      <span class="text-sm">New Flow</span>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </section>
-          </div>
-
           <!-- HISTORY TAB -->
           <div v-else-if="tab==='history'" class="h-full">
             <section class="h-full">
@@ -472,6 +405,12 @@
             </section>
           </div>
 
+          <!-- RULES TAB -->
+          <div v-else-if="tab==='rules'" class="h-full p-3">
+            <h2 class="text-xl font-bold">Rules</h2>
+            <p class="text-sec mt-2">Use this space to define upcoming automations.</p>
+          </div>
+
           <!-- SETTINGS TAB -->
           <div v-else-if="tab==='settings'" class="h-full p-3">
             <h2 class="text-xl font-bold">Settings</h2>
@@ -503,21 +442,60 @@
 
 <script>
 const STORAGE_KEY = 'df_v1';
+const RESET_FLAG_KEY = STORAGE_KEY + '_reset_import_once';
 
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
+const ViewTreeMenu = {
+  name: 'ViewTreeMenu',
+  props: {
+    nodes: { type: Array, default: () => [] },
+    level: { type: Number, default: 0 },
+    currentId: { type: String, default: '' },
+  },
+  render(h) {
+    const nodes = Array.isArray(this.nodes) ? this.nodes : [];
+    if (!nodes.length) return null;
+    const items = nodes.map(node => {
+      const isFolder = node.type === 'folder';
+      const isView = node.type === 'view';
+      const btnClasses = ['menu-item', 'view-node-btn', node.type];
+      if (isView && node.viewId === this.currentId) btnClasses.push('is-active');
+      const btn = h('button', {
+        class: btnClasses,
+        attrs: { type: 'button' },
+        on: !isFolder ? {
+          click: evt => {
+            evt?.stopPropagation?.();
+            this.$emit('select', node);
+          }
+        } : {}
+      }, [node.label || node.name || 'Unnamed']);
+      const children = [btn];
+      if (isFolder && Array.isArray(node.children) && node.children.length) {
+        children.push(h('div', { class: 'view-submenu' }, [
+          h(ViewTreeMenu, {
+            props: { nodes: node.children, level: this.level + 1, currentId: this.currentId },
+            on: { select: payload => this.$emit('select', payload) }
+          })
+        ]));
+      }
+      return h('li', { class: ['view-node', node.type], key: node.key || node.path || node.viewId }, children);
+    });
+    return h('ul', { class: ['view-tree-list', `level-${this.level}`] }, items);
+  }
+};
+
 export default {
+  components: { ViewTreeMenu },
   data() {
     return {
-      tab: 'lists', // 'lists' | 'flows' | 'history' | 'settings' | 'stats'
+      tab: 'lists', // 'lists' | 'history' | 'rules' | 'settings' | 'stats'
       lists: [],
-      flows: [],
-      // Views for lists and flows
+      // Views for lists
       listViews: [], // [{id,name,listIds:[] }]
-      flowViews: [], // [{id,name,flowIds:[] }]
       currentListViewId: '',
-      currentFlowViewId: '',
-      history: {}, // { [listId]: [{id,title,completedAt,fromFlowId,stepIndex,action?: 'completed'|'deleted'}] }
+      history: {}, // { [listId]: [{id,title,type,body?,completedAt,action?: 'completed'|'deleted'}] }
       listTitles: {}, // { [listId]: title } - persists names for deleted lists
       ui: {
         sideOpen: false,
@@ -527,17 +505,14 @@ export default {
         newListMenuOpen: false,
         newListTitle: '',
         newListMenuPos: { top: 0, left: 0 },
-        selectedFlowId: '',
         addMode: 'task',
         newTaskTitle: '',
+        newNoteBody: '',
         placeholderSample: '',
         completing: {},
         celebrateTaskId: null,
         // action menus
         listActionsId: null,
-        flowActionsId: null,
-        stepActionsId: null,
-        stepTaskActionsId: null,
         taskActionsId: null,
         menuDir: {},
         historyActionsKey: null,
@@ -545,19 +520,22 @@ export default {
         undoStack: [],
         redoStack: [],
         // view menus
-        listViewMenuOpen: false,
-        flowViewMenuOpen: false,
         currentViewMenuOpen: false,
         currentViewDeleteConfirm: false,
         listViewEditName: '',
-        flowViewEditName: '',
         listViewNameEditing: false,
-        flowViewNameEditing: false,
+        listViewEditPrefix: '',
         inlineEditKey: null,
         inlineEditValue: '',
         draggingListId: null,
         draggingListIndex: -1,
         listDeleteConfirmId: null,
+        notePlaceholderSample: '',
+        drag: null,
+        drop: null,
+        isDragging: false,
+        cardReturnAnchor: null,
+        pendingScrollCardId: null,
       }
     };
   },
@@ -584,49 +562,112 @@ export default {
       (this.lists || []).forEach(l => ids.add(l.id));
       return Array.from(ids);
     },
-    listViewName() { return (this.listViews.find(v=>v.id===this.currentListViewId)?.name) || 'Home'; },
-    flowViewName() { return (this.flowViews.find(v=>v.id===this.currentFlowViewId)?.name) || 'Home'; },
-    listsForCurrentView() {
-      const view = this.listViews.find(x=>x.id===this.currentListViewId);
-      const homeId = this.homeListViewId();
-      if (!view || view.id === homeId) return this.lists;
-      return (this.lists||[]).filter(l => (l.viewId || homeId) === view.id);
+    listViewName() { return (this.listViews.find(v=>v.id===this.currentListViewId)?.name) || 'Main'; },
+    viewTree() { return this.buildViewTree(); },
+    viewPathSegments() {
+      const MAIN = 'Main';
+      const view = this.listViews.find(v=>v.id===this.currentListViewId);
+      const raw = (view?.name || MAIN).trim() || MAIN;
+      const parts = raw.split('/').map(s=>s.trim()).filter(Boolean);
+      const segments = parts.length ? parts : [MAIN];
+      return segments.map((label, idx) => ({
+        label,
+        path: segments.slice(0, idx+1).join('/')
+      }));
     },
-    flowsForCurrentView() {
-      const v = this.flowViews.find(x=>x.id===this.currentFlowViewId);
-      if (!v) return this.flows;
-      const set = new Set(v.flowIds||[]);
-      return this.flows.filter(f=>set.has(f.id));
+    listsForCurrentView() {
+      const homeId = this.homeListViewId();
+      const currentId = this.currentListViewId || homeId;
+      const targetView = (this.listViews || []).find(v => v.id === currentId);
+      const viewId = targetView ? targetView.id : homeId;
+      if (!viewId) return this.lists || [];
+      return (this.lists || []).filter(list => {
+        const owner = (list && list.viewId) ? list.viewId : homeId;
+        return owner === viewId;
+      });
     },
     canUndo() { return (this.ui.undoStack?.length || 0) > 0; },
     canRedo() { return (this.ui.redoStack?.length || 0) > 0; },
+    viewProgressCache() {
+      const cache = {};
+      const listsByView = {};
+      const homeId = this.homeListViewId();
+      (this.lists || []).forEach(list => {
+        if (!list) return;
+        const vid = list.viewId || homeId;
+        if (!listsByView[vid]) listsByView[vid] = [];
+        listsByView[vid].push(list);
+      });
+      const completedByView = {};
+      Object.values(this.history || {}).forEach(entries => {
+        (entries || []).forEach(entry => {
+          if (!entry || entry.action !== 'completed') return;
+          const vid = entry.viewId;
+          if (!vid) return;
+          completedByView[vid] = (completedByView[vid] || 0) + 1;
+        });
+      });
+      const calc = (viewId, stack=[]) => {
+        if (!viewId) return { hasContent: false, percent: 0, totalUnits: 0, completedUnits: 0, listCount: 0, cardCount: 0 };
+        if (stack.includes(viewId)) return { hasContent: false, percent: 0, totalUnits: 0, completedUnits: 0, listCount: 0, cardCount: 0 };
+        if (cache[viewId]) return cache[viewId];
+        const lists = listsByView[viewId] || [];
+        let cardCount = 0;
+        let totalUnits = 0;
+        let completedUnits = completedByView[viewId] || 0;
+        totalUnits += completedUnits;
+        lists.forEach(list => {
+          (list.tasks || []).forEach(task => {
+            if (!task) return;
+            if (task.type === 'note') {
+              cardCount += 1;
+              return;
+            }
+            cardCount += 1;
+            totalUnits += 1;
+            const linkedId = this.getLinkedViewId(task);
+            if (linkedId) {
+              const child = calc(linkedId, stack.concat(viewId));
+              if (child.hasContent) {
+                completedUnits += (child.percent || 0) / 100;
+              }
+            }
+          });
+        });
+        const hasContent = lists.length > 0 || cardCount > 0;
+        const percent = totalUnits > 0 ? Math.max(0, Math.min(100, Math.round((completedUnits / totalUnits) * 100))) : 0;
+        cache[viewId] = { hasContent, percent, totalUnits, completedUnits, listCount: lists.length, cardCount };
+        return cache[viewId];
+      };
+      const allViewIds = new Set([
+        ...Object.keys(listsByView || {}),
+        ...(this.listViews || []).map(v => v.id).filter(Boolean)
+      ]);
+      allViewIds.forEach(id => calc(id));
+      return cache;
+    },
   },
 
   created() {
+    try {
+      if (!localStorage.getItem(RESET_FLAG_KEY)) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.setItem(RESET_FLAG_KEY, 'done');
+      }
+    } catch {}
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const { lists, flows, history, listTitles, listViews, flowViews, currentListViewId, currentFlowViewId } = JSON.parse(raw);
-      this.lists = lists || [];
-      this.flows = flows || [];
+      const { lists, history, listTitles, listViews, currentListViewId } = JSON.parse(raw);
+      this.lists = Array.isArray(lists) ? lists : [];
       this.history = history || {};
       // reconstruct or use stored titles
       this.listTitles = listTitles || {};
       this.lists.forEach(l => { if (!this.listTitles[l.id]) this.listTitles[l.id] = l.title; });
       this.listViews = Array.isArray(listViews) ? listViews : [];
-      this.flowViews = Array.isArray(flowViews) ? flowViews : [];
       this.currentListViewId = currentListViewId || '';
-      this.currentFlowViewId = currentFlowViewId || '';
+      this.normalizeStoredData();
       this.ensureDefaultViews();
     } else {
-      const f1 = {
-        id: uid(),
-        title: 'Sample Flow',
-        steps: [
-          { id: uid(), type: 'single', taskTitle: 'Step 1: Do something' },
-          { id: uid(), type: 'single', taskTitle: 'Step 2: Next thing' },
-        ],
-      };
-      this.flows = [f1];
       const initialList = { id: uid(), title: 'My List', tasks: [] };
       this.lists = [initialList];
       this.listTitles[initialList.id] = initialList.title;
@@ -683,13 +724,13 @@ export default {
 
   watch: {
     lists: { deep: true, handler() { this.save(); } },
-    flows: { deep: true, handler() { this.save(); } },
     history: { deep: true, handler() { this.save(); } },
     listTitles: { deep: true, handler() { this.save(); } },
     listViews: { deep: true, handler() { this.save(); } },
-    flowViews: { deep: true, handler() { this.save(); } },
-    currentListViewId() { this.save(); },
-    currentFlowViewId() { this.save(); },
+    currentListViewId(newVal) {
+      this.save();
+      this.handleViewChange(newVal);
+    },
     tab(newVal) {
       // Recalculate list heights when switching back to Lists
       if (newVal === 'lists') this.$nextTick(this.updateListHeights);
@@ -703,113 +744,292 @@ export default {
   },
 
   methods: {
+    normalizeStoredData() {
+      try {
+        (this.lists || []).forEach(list => {
+          if (!Array.isArray(list.tasks)) list.tasks = [];
+          list.tasks = list.tasks.map(task => this.normalizeTask(task));
+        });
+        Object.keys(this.history || {}).forEach(key => {
+          const raw = this.history[key];
+          const entries = Array.isArray(raw) ? raw : [];
+          this.history[key] = entries.map(entry => this.normalizeHistoryEntry(entry));
+        });
+      } catch {}
+    },
+    normalizeTask(task = {}) {
+      const normalized = { ...(task || {}) };
+      normalized.id = normalized.id || uid();
+      normalized.title = (normalized.title || '').trim() || 'Untitled';
+      normalized.type = normalized.type === 'note' ? 'note' : 'task';
+      if (normalized.type === 'note') {
+        normalized.body = typeof normalized.body === 'string' ? normalized.body : (normalized.body ?? '').toString();
+      } else {
+        delete normalized.body;
+      }
+      normalized.children = [];
+      normalized.links = Array.isArray(normalized.links) ? normalized.links.filter(l=>l && l.viewId) : [];
+      delete normalized.fromFlowId;
+      delete normalized.stepIndex;
+      return normalized;
+    },
+    normalizeHistoryEntry(entry = {}) {
+      const normalizedTask = this.normalizeTask(entry);
+      return {
+        id: normalizedTask.id,
+        title: normalizedTask.title,
+        type: normalizedTask.type,
+        body: normalizedTask.type === 'note' ? (normalizedTask.body || '') : '',
+        links: Array.isArray(normalizedTask.links) ? normalizedTask.links.slice() : [],
+        completedAt: entry.completedAt || Date.now(),
+        action: entry.action || 'completed',
+        viewId: entry.viewId || null,
+      };
+    },
+    buildHistoryEntry(task, action='deleted') {
+      const normalizedTask = this.normalizeTask(task);
+      return {
+        id: normalizedTask.id,
+        title: normalizedTask.title,
+        type: normalizedTask.type,
+        body: normalizedTask.type === 'note' ? (normalizedTask.body || '') : '',
+        links: Array.isArray(normalizedTask.links) ? normalizedTask.links.slice() : [],
+        completedAt: Date.now(),
+        action,
+        viewId: this.currentListViewId || null,
+      };
+    },
+    buildViewTree() {
+      try {
+        const root = [];
+        const folderMap = new Map();
+        const ensureFolder = (segments) => {
+          const path = segments.join('/');
+          if (folderMap.has(path)) return folderMap.get(path);
+          const label = segments[segments.length - 1] || '';
+          const node = { type: 'folder', label, path, key: 'folder-' + path, children: [] };
+          folderMap.set(path, node);
+          if (segments.length === 1) {
+            root.push(node);
+          } else {
+            const parentPath = segments.slice(0, -1).join('/');
+            const parent = folderMap.get(parentPath);
+            if (parent) parent.children.push(node);
+            else root.push(node);
+          }
+          return node;
+        };
+        (this.listViews || []).forEach(view => {
+          if (!view || !view.id) return;
+          const name = (view.name || 'Untitled').trim() || 'Untitled';
+          const parts = name.split('/').map(s => s.trim()).filter(Boolean);
+          const segments = parts.length ? parts : [name];
+          let parentList = root;
+          if (segments.length > 1) {
+            segments.slice(0, -1).forEach((seg, idx) => {
+              const pathSegments = segments.slice(0, idx + 1);
+              const folder = ensureFolder(pathSegments);
+              parentList = folder.children;
+            });
+          }
+          const label = segments[segments.length - 1];
+          parentList.push({
+            type: 'view',
+            label,
+            path: segments.join('/'),
+            key: 'view-' + view.id,
+            viewId: view.id,
+          });
+        });
+        const sortNodes = list => {
+          list.sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+            return (a.label || '').localeCompare(b.label || '');
+          });
+          list.forEach(node => {
+            if (node.children) sortNodes(node.children);
+          });
+        };
+        sortNodes(root);
+        return root;
+      } catch { return []; }
+    },
+    sanitizeSegment(text){
+      return (text || '')
+        .replace(/[\\/#?%*:"<>|]/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 40) || 'Item';
+    },
+    getLinkedViewId(task){
+      try {
+        const link = Array.isArray(task?.links) ? task.links.find(l => l && l.viewId) : null;
+        return link?.viewId || '';
+      } catch { return ''; }
+    },
+    getViewProgress(viewId){
+      return (this.viewProgressCache && viewId) ? (this.viewProgressCache[viewId] || { hasContent: false, percent: 0 }) : { hasContent: false, percent: 0 };
+    },
+    milestonePercent(task){
+      const viewId = this.getLinkedViewId(task);
+      if (!viewId) return 0;
+      const stats = this.getViewProgress(viewId);
+      return stats?.hasContent ? (stats.percent || 0) : 0;
+    },
+    viewHasContent(viewId){
+      const stats = this.getViewProgress(viewId);
+      return !!stats?.hasContent;
+    },
+    isMilestone(task){
+      const viewId = this.getLinkedViewId(task);
+      if (!viewId) return false;
+      return this.viewHasContent(viewId);
+    },
+    promptNewViewPath(basePath='') {
+      const prefix = basePath ? basePath.replace(/\/+$/,'') + '/' : '';
+      const input = prompt('Enter new view name', 'New View');
+      if (!input) return;
+      const raw = (prefix + input).replace(/\/+/g, '/').replace(/^\//, '').replace(/\/$/, '');
+      this.addListView(raw);
+    },
+    jumpToViewPath(path){
+      const target = (this.listViews||[]).find(v=> (v.name||'').trim() === path.trim());
+      if (!target) return;
+      this.switchListView(target.id);
+    },
+    viewLabel(name='') {
+      const parts = (name || '').split('/').map(s=>s.trim()).filter(Boolean);
+      if (!parts.length) return name || 'Main';
+      return parts[parts.length-1];
+    },
+    linkedViewName(task){
+      try {
+        const viewId = this.getLinkedViewId(task);
+        if (!viewId) return '';
+        const view = this.listViews.find(v=>v.id===viewId);
+        return (view?.name || '').split('/').pop() || view?.name || '';
+      } catch { return ''; }
+    },
+    openItemView(list, task){
+      try {
+        const originViewId = this.currentListViewId || this.homeListViewId();
+        const baseName = (this.listViewName || 'Main').trim() || 'Main';
+        const segment = this.sanitizeSegment(task?.title || task?.body || 'Item');
+        const fullPath = [baseName, segment].filter(Boolean).join('/').replace(/\/+/g,'/').replace(/^\//,'').replace(/\/$/,'');
+        const linkedId = this.getLinkedViewId(task);
+        let view = linkedId ? this.listViews.find(v=>v.id===linkedId) : null;
+        if (view) {
+          if (fullPath && view.name !== fullPath) view.name = fullPath;
+        } else {
+          view = this.listViews.find(v=> (v.name||'').trim() === fullPath);
+          if (!view) {
+            view = { id: uid(), name: fullPath || segment || 'Item', listIds: [] };
+            this.listViews.push(view);
+          }
+        }
+        if (!Array.isArray(task.links)) task.links = [];
+        const existing = task.links.find(l=>l?.viewId===view.id);
+        if (existing) {
+          task.links = [existing];
+        } else {
+          task.links = [{ viewId: view.id }];
+        }
+        this.ui.cardReturnAnchor = { viewId: originViewId, cardId: task.id };
+        this.switchListView(view.id);
+        this.tab = 'lists';
+      } catch {}
+    },
     homeListViewId() {
-      return (this.listViews.find(v => (v.name || '').toLowerCase() === 'home')?.id) || (this.listViews[0]?.id || '');
+      return (this.listViews.find(v => (v.name || '').toLowerCase() === 'main')?.id) || (this.listViews[0]?.id || '');
     },
     syncListMembership() {
       try {
         const homeId = this.homeListViewId();
-        const map = new Map();
-        (this.listViews || []).forEach(v => {
-          if (!v) return;
+        const depth = (name = '') => {
+          const parts = (name || '').split('/').map(p => p.trim()).filter(Boolean);
+          return parts.length || 1;
+        };
+        const viewMap = new Map();
+        const fallbackOwners = new Map();
+        const orderedViews = (this.listViews || [])
+          .filter(v => v && v.id)
+          .sort((a, b) => depth(b?.name) - depth(a?.name));
+        orderedViews.forEach(v => {
+          const ids = Array.isArray(v.listIds) ? v.listIds.filter(Boolean) : [];
+          const uniqueIds = Array.from(new Set(ids));
+          uniqueIds.forEach(listId => {
+            if (!fallbackOwners.has(listId)) fallbackOwners.set(listId, v.id);
+          });
           v.listIds = [];
-          map.set(v.id, v);
+          viewMap.set(v.id, v);
         });
+        const defaultViewId = viewMap.has(homeId) ? homeId : ((this.listViews || [])[0]?.id || null);
         (this.lists || []).forEach(list => {
           if (!list) return;
-          if (!list.viewId || !map.has(list.viewId)) list.viewId = homeId;
-          map.get(list.viewId)?.listIds?.push(list.id);
+          let targetId = list.viewId;
+          if (!targetId || !viewMap.has(targetId)) {
+            targetId = fallbackOwners.get(list.id);
+          }
+          if (!targetId || !viewMap.has(targetId)) {
+            targetId = defaultViewId;
+          }
+          list.viewId = targetId;
+          const targetView = targetId ? viewMap.get(targetId) : null;
+          if (targetView) {
+            if (!Array.isArray(targetView.listIds)) targetView.listIds = [];
+            if (!targetView.listIds.includes(list.id)) targetView.listIds.push(list.id);
+          }
         });
       } catch {}
     },
     /* --- Views management --- */
     ensureDefaultViews() {
       try {
-        const normalizeListViews = () => {
-          let homeSeen = false;
-          const allIds = (this.lists||[]).map(l=>l.id);
-          const dedup = [];
-          const seenIds = new Set();
-          (Array.isArray(this.listViews) ? this.listViews : []).forEach(v=>{
-            if (!v || !v.id || seenIds.has(v.id)) return;
-            seenIds.add(v.id);
-            if (!Array.isArray(v.listIds)) v.listIds = [];
-            if ((v.name||'').toLowerCase() === 'home') {
-              if (homeSeen) return;
-              homeSeen = true;
-              v.listIds = allIds.slice();
-            }
-            dedup.push(v);
-          });
-          if (!homeSeen) {
-            dedup.unshift({ id: uid(), name: 'Home', listIds: allIds.slice() });
-            homeSeen = true;
+        const MAIN = 'Main';
+        const allIds = (this.lists||[]).map(l=>l.id);
+        const dedup = [];
+        const seenIds = new Set();
+        let mainSeen = false;
+        (Array.isArray(this.listViews) ? this.listViews : []).forEach(v=>{
+          if (!v || !v.id || seenIds.has(v.id)) return;
+          seenIds.add(v.id);
+          const name = (v.name || '').trim();
+          if (!name) v.name = MAIN;
+          if (name.toLowerCase() === 'home') v.name = MAIN;
+          if (!Array.isArray(v.listIds) || !v.listIds.length) v.listIds = [];
+          if ((v.name||'').toLowerCase() === MAIN.toLowerCase()) {
+            if (mainSeen) return;
+            mainSeen = true;
+            v.listIds = allIds.slice();
           }
-          this.listViews = dedup;
-          if (!this.currentListViewId || !this.listViews.some(v=>v.id===this.currentListViewId)) {
-            this.currentListViewId = this.listViews[0]?.id || '';
-          }
-          this.syncListMembership();
-        };
-        const normalizeFlowViews = () => {
-          let homeSeen = false;
-          const allIds = (this.flows||[]).map(f=>f.id);
-          const dedup = [];
-          const seenIds = new Set();
-          (Array.isArray(this.flowViews) ? this.flowViews : []).forEach(v=>{
-            if (!v || !v.id || seenIds.has(v.id)) return;
-            seenIds.add(v.id);
-            if (!Array.isArray(v.flowIds)) v.flowIds = [];
-            if ((v.name||'').toLowerCase() === 'home') {
-              if (homeSeen) return;
-              homeSeen = true;
-              v.flowIds = allIds.slice();
-            }
-            dedup.push(v);
-          });
-          if (!homeSeen) {
-            dedup.unshift({ id: uid(), name: 'Home', flowIds: allIds.slice() });
-            homeSeen = true;
-          }
-          this.flowViews = dedup;
-          if (!this.currentFlowViewId || !this.flowViews.some(v=>v.id===this.currentFlowViewId)) {
-            this.currentFlowViewId = this.flowViews[0]?.id || '';
-          }
-        };
-        normalizeListViews();
-        normalizeFlowViews();
+          dedup.push(v);
+        });
+        if (!mainSeen) {
+          dedup.unshift({ id: uid(), name: MAIN, listIds: allIds.slice() });
+          mainSeen = true;
+        }
+        this.listViews = dedup;
+        if (!this.currentListViewId || !this.listViews.some(v=>v.id===this.currentListViewId)) {
+          this.currentListViewId = this.listViews[0]?.id || '';
+        }
+        this.syncListMembership();
       } catch {}
     },
     saveListViewName(){
       try {
         const v = this.listViews.find(x=>x.id===this.currentListViewId);
-        if (!v) return; const name = (this.ui.listViewEditName||'').trim();
-        if (!name) { this.ui.listViewNameEditing = false; return; }
+        if (!v) return;
+        const label = (this.ui.listViewEditName||'').trim();
+        if (!label) { this.cancelListViewName(); return; }
+        const prefix = (this.ui.listViewEditPrefix||'').trim().replace(/\/+$/,'');
+        const combined = prefix ? `${prefix}/${label}` : label;
+        const name = combined.replace(/\/+/g,'/').replace(/^\//,'').replace(/\/$/,'') || 'Main';
         this.mutate('renameListView', ()=>{ v.name = name; });
+        this.ui.listViewEditPrefix = '';
         this.ui.listViewNameEditing = false;
       } catch {}
     },
-    saveFlowViewName(){
-      try {
-        const v = this.flowViews.find(x=>x.id===this.currentFlowViewId);
-        if (!v) return; const name = (this.ui.flowViewEditName||'').trim();
-        if (!name) { this.ui.flowViewNameEditing = false; return; }
-        this.mutate('renameFlowView', ()=>{ v.name = name; });
-        this.ui.flowViewNameEditing = false;
-      } catch {}
-    },
-    startEditListViewName(ev){
-      this.ui.listViewNameEditing = true; this.ui.listViewEditName = this.listViewName;
-      this.ui.listViewMenuOpen = true;
-      this.$nextTick(()=>{ try { this.$refs.listViewNameInput?.focus(); } catch {} this.decideMenuDir('listview', ev); });
-    },
-    cancelListViewName(){ this.ui.listViewNameEditing = false; },
-    startEditFlowViewName(ev){
-      this.ui.flowViewNameEditing = true; this.ui.flowViewEditName = this.flowViewName;
-      this.ui.flowViewMenuOpen = true;
-      this.$nextTick(()=>{ try { this.$refs.flowViewNameInput?.focus(); } catch {} this.decideMenuDir('flowview', ev); });
-    },
-    cancelFlowViewName(){ this.ui.flowViewNameEditing = false; },
+    cancelListViewName(){ this.ui.listViewNameEditing = false; this.ui.listViewEditPrefix=''; },
 
     /* Inline edit across entities */
     startInlineEditList(list, ev){
@@ -818,23 +1038,11 @@ export default {
       this.ui.listActionsId = list.id;
       this.$nextTick(()=>{ try { document.getElementById('edit-input-list-'+list.id)?.focus(); } catch {} this.decideMenuDir('list-'+list.id, ev); });
     },
-    startInlineEditFlow(flow, ev){
-      this.ui.inlineEditKey = 'flow-' + flow.id;
-      this.ui.inlineEditValue = flow.title;
-      this.ui.flowActionsId = flow.id;
-      this.$nextTick(()=>{ try { document.getElementById('edit-input-flow-'+flow.id)?.focus(); } catch {} this.decideMenuDir('flow-'+flow.id, ev); });
-    },
     startInlineEditTask(list, t, ev){
       this.ui.inlineEditKey = 'task-' + list.id + '-' + t.id;
       this.ui.inlineEditValue = t.title;
       this.ui.taskActionsId = t.id;
       this.$nextTick(()=>{ try { document.getElementById('edit-input-task-'+list.id+'-'+t.id)?.focus(); } catch {} this.decideMenuDir('task-'+t.id, ev); });
-    },
-    startInlineEditStepTask(flow, step, ev){
-      this.ui.inlineEditKey = 'steptask-' + flow.id + '-' + step.id;
-      this.ui.inlineEditValue = step.taskTitle || '';
-      this.ui.stepTaskActionsId = step.id;
-      this.$nextTick(()=>{ try { document.getElementById('edit-input-steptask-'+flow.id+'-'+step.id)?.focus(); } catch {} this.decideMenuDir('steptask-'+step.id, ev); });
     },
     saveInlineEdit(){
       const key = this.ui.inlineEditKey; if (!key) return;
@@ -843,35 +1051,40 @@ export default {
       this.mutate('inlineEdit', ()=>{
         if (kind==='list') {
           const id = parts[1]; const l = this.lists.find(x=>x.id===id); if (l) { l.title = val; this.listTitles[id] = val; }
-        } else if (kind==='flow') {
-          const id = parts[1]; const f = this.flows.find(x=>x.id===id); if (f) f.title = val;
         } else if (kind==='task') {
           const lid = parts[1], tid = parts[2];
-          const l = this.lists.find(x=>x.id===lid); if (l) { const tt = l.tasks.find(x=>x.id===tid); if (tt) tt.title = val; }
-        } else if (kind==='steptask') {
-          const fid = parts[1], sid = parts[2];
-          const f = this.flows.find(x=>x.id===fid); if (f) { const st = (f.steps||[]).find(s=>s.id===sid); if (st) st.taskTitle = val; }
+          const l = this.lists.find(x=>x.id===lid);
+          if (l) {
+            const tt = l.tasks.find(x=>x.id===tid);
+            if (tt) {
+              tt.title = val;
+              const linkedId = this.getLinkedViewId(tt);
+              if (linkedId) {
+                const view = this.listViews.find(v=>v.id===linkedId);
+                if (view) {
+                  const rawName = (view.name || '').trim();
+                  const segments = rawName ? rawName.split('/').map(s=>s.trim()).filter(Boolean) : [];
+                  const prefix = segments.slice(0, -1).join('/');
+                  const last = this.sanitizeSegment(val) || 'Item';
+                  const combined = prefix ? `${prefix}/${last}` : last;
+                  view.name = combined;
+                }
+              }
+            }
+          }
         }
       });
       this.ui.inlineEditKey = null; this.ui.inlineEditValue = '';
     },
     cancelInlineEdit(){ this.ui.inlineEditKey = null; this.ui.inlineEditValue = ''; },
-    switchListView(id){ this.mutate('switchListView', ()=>{ this.currentListViewId = id; this.ui.listViewMenuOpen=false; }); },
-    switchFlowView(id){ this.mutate('switchFlowView', ()=>{ this.currentFlowViewId = id; this.ui.flowViewMenuOpen=false; }); },
-    addListView(){
-      const name = prompt('New view name?', 'New View'); if (!name) return;
+    switchListView(id){ this.mutate('switchListView', ()=>{ this.currentListViewId = id; }); },
+    addListView(nameInput){
+      const raw = (nameInput !== undefined) ? nameInput : prompt('New view name?', 'New View');
+      const final = (raw || '').trim();
+      if (!final) return;
       this.mutate('addListView', ()=>{
-        const v = { id: uid(), name: name.trim()||'New View', listIds: [] };
+        const v = { id: uid(), name: final || 'New View', listIds: [] };
         this.listViews.push(v); this.currentListViewId = v.id;
-        this.ui.listViewMenuOpen=false;
-      });
-    },
-    addFlowView(){
-      const name = prompt('New flow view name?', 'New View'); if (!name) return;
-      this.mutate('addFlowView', ()=>{
-        const v = { id: uid(), name: name.trim()||'New View', flowIds: [] };
-        this.flowViews.push(v); this.currentFlowViewId = v.id;
-        this.ui.flowViewMenuOpen=false;
       });
     },
     /* --- Undo/Redo core --- */
@@ -880,13 +1093,10 @@ export default {
       try {
         const snap = {
           lists: this._deepClone(this.lists),
-          flows: this._deepClone(this.flows),
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
           listViews: this._deepClone(this.listViews),
-          flowViews: this._deepClone(this.flowViews),
           currentListViewId: this.currentListViewId,
-          currentFlowViewId: this.currentFlowViewId,
           label,
           ts: Date.now(),
         };
@@ -899,13 +1109,10 @@ export default {
       try {
         if (!snap) return;
         this.lists = this._deepClone(snap.lists || []);
-        this.flows = this._deepClone(snap.flows || []);
         this.history = this._deepClone(snap.history || {});
         this.listTitles = this._deepClone(snap.listTitles || {});
         if (snap.listViews) this.listViews = this._deepClone(snap.listViews);
-        if (snap.flowViews) this.flowViews = this._deepClone(snap.flowViews);
         if (snap.currentListViewId) this.currentListViewId = snap.currentListViewId;
-        if (snap.currentFlowViewId) this.currentFlowViewId = snap.currentFlowViewId;
         this.$nextTick(this.updateListHeights);
       } catch {}
     },
@@ -915,13 +1122,10 @@ export default {
         if (!prev) return;
         const cur = {
           lists: this._deepClone(this.lists),
-          flows: this._deepClone(this.flows),
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
           listViews: this._deepClone(this.listViews),
-          flowViews: this._deepClone(this.flowViews),
           currentListViewId: this.currentListViewId,
-          currentFlowViewId: this.currentFlowViewId,
           label: 'redo', ts: Date.now()
         };
         this.ui.redoStack.push(cur);
@@ -934,13 +1138,10 @@ export default {
         if (!next) return;
         const cur = {
           lists: this._deepClone(this.lists),
-          flows: this._deepClone(this.flows),
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
           listViews: this._deepClone(this.listViews),
-          flowViews: this._deepClone(this.flowViews),
           currentListViewId: this.currentListViewId,
-          currentFlowViewId: this.currentFlowViewId,
           label: 'undo', ts: Date.now()
         };
         this.ui.undoStack.push(cur);
@@ -965,6 +1166,109 @@ export default {
         else if (key === 'y' || (e.shiftKey && key === 'z')) { e.preventDefault(); this.redo(); }
       } catch {}
     },
+    exportWorkspace(){
+      try {
+        const payload = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          data: {
+            lists: this._deepClone(this.lists),
+            history: this._deepClone(this.history),
+            listTitles: this._deepClone(this.listTitles),
+            listViews: this._deepClone(this.listViews),
+            currentListViewId: this.currentListViewId,
+          },
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `todojo-export-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch {}
+    },
+    triggerImportWorkspace(){
+      try {
+        this.$refs.importInput?.click();
+      } catch {}
+    },
+    handleWorkspaceImport(event){
+      try {
+        const input = event?.target;
+        const file = input?.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const text = reader.result;
+            const parsed = JSON.parse(text);
+            this.applyImportedWorkspace(parsed);
+          } catch {}
+          if (input) input.value = '';
+        };
+        reader.readAsText(file);
+      } catch {
+        if (event?.target) event.target.value = '';
+      }
+    },
+    applyImportedWorkspace(payload){
+      try {
+        const pack = payload?.data ? payload.data : payload;
+        if (!pack) return;
+        this.mutate('importWorkspace', () => {
+          this.lists = Array.isArray(pack.lists) ? this._deepClone(pack.lists) : [];
+          this.history = pack.history ? this._deepClone(pack.history) : {};
+          this.listTitles = pack.listTitles ? this._deepClone(pack.listTitles) : {};
+          this.listViews = Array.isArray(pack.listViews) ? this._deepClone(pack.listViews) : [];
+          this.currentListViewId = pack.currentListViewId || '';
+          this.normalizeStoredData();
+          this.ensureDefaultViews();
+        });
+      } catch {}
+    },
+    handleViewChange(viewId){
+      try {
+        if (!viewId) return;
+        const anchor = this.ui.cardReturnAnchor;
+        if (anchor && anchor.viewId === viewId && anchor.cardId) {
+          this.scheduleScrollToCard(anchor.cardId);
+          this.ui.cardReturnAnchor = null;
+        } else if (this.ui.pendingScrollCardId) {
+          this.scheduleScrollToCard(this.ui.pendingScrollCardId);
+        }
+      } catch {}
+    },
+    scheduleScrollToCard(cardId){
+      if (!cardId) return;
+      this.ui.pendingScrollCardId = cardId;
+      this.$nextTick(()=>this.scrollCardIntoView(cardId));
+    },
+    scrollCardIntoView(cardId, attempt=0){
+      try {
+        const container = this.$refs.listsScroller;
+        if (!container) {
+          if (attempt < 5) setTimeout(()=>this.scrollCardIntoView(cardId, attempt+1), 120);
+          return;
+        }
+        const anchorEl = document.getElementById('anchor-task-'+cardId);
+        if (!anchorEl) {
+          if (attempt < 5) setTimeout(()=>this.scrollCardIntoView(cardId, attempt+1), 120);
+          return;
+        }
+        const listCard = anchorEl.closest('.list-card') || anchorEl.closest('.list-element') || anchorEl;
+        const containerRect = container.getBoundingClientRect();
+        const listRect = listCard.getBoundingClientRect();
+        const delta = listRect.left - containerRect.left;
+        const padding = 24;
+        const target = Math.max(container.scrollLeft + delta - padding, 0);
+        container.scrollTo({ left: target, behavior: 'smooth' });
+        this.ui.pendingScrollCardId = null;
+      } catch {}
+    },
     restoreHistoryItem(lid, h) {
       this.mutate('restoreFromHistory', () => {
         try {
@@ -982,12 +1286,13 @@ export default {
           if (!this.listTitles[lid]) this.listTitles[lid] = list.title;
           const exists = list.tasks.some(t=>t.id===h.id);
           if (!exists) {
-            list.tasks.push({
+            list.tasks.push(this.normalizeTask({
               id: h.id,
               title: h.title,
-              fromFlowId: h.fromFlowId || null,
-              stepIndex: h.stepIndex ?? null,
-            });
+              type: h.type,
+              body: h.body,
+              links: Array.isArray(h.links) ? h.links.slice() : [],
+            }));
           }
           // remove this entry from history (first match by id and timestamp)
           const arr = this.history[lid] || [];
@@ -1001,115 +1306,6 @@ export default {
       if (!h || !h.id) return false;
       if (String(h.id).startsWith('__list_deleted__')) return false;
       return true;
-    },
-    /* --- drag & drop: tasks --- */
-    onTaskRowClick(list, t, ev) {
-      if (this.ui.isDragging) return; // ignore clicks during drag
-      this.openTaskMenu(list, t, ev);
-    },
-    onTaskDragStart(list, t, ti, ev) {
-      try {
-        this.closeAllMenus();
-        if (!this.ui.drag) this.ui.drag = {};
-        this.ui.isDragging = true;
-        const idx = list.tasks.findIndex(x=>x.id===t.id);
-        this.ui.drag.taskId = t.id;
-        this.ui.drag.srcListId = list.id;
-        this.ui.drag.srcIndex = idx >= 0 ? idx : ti;
-        if (ev?.dataTransfer) {
-          ev.dataTransfer.effectAllowed = 'move';
-          try { ev.dataTransfer.setData('text/plain', t.id); } catch {}
-        }
-      } catch {}
-    },
-    onTaskDragEnd(ev) {
-      this.clearDragState();
-    },
-    onTaskDragOver(list, t, ti, ev) {
-      try {
-        const rect = ev.currentTarget?.getBoundingClientRect();
-        const mid = rect ? (rect.top + rect.height / 2) : ev.clientY;
-        const before = ev.clientY < mid;
-        const baseIdx = list.tasks.findIndex(x=>x.id===t.id);
-        const idx = baseIdx >= 0 ? baseIdx : ti;
-        const dropIndex = before ? idx : idx + 1;
-        if (!this.ui.drop) this.ui.drop = {};
-        this.ui.drop.listId = list.id;
-        this.ui.drop.index = Math.max(0, Math.min(dropIndex, list.tasks.length));
-        if (ev?.dataTransfer) ev.dataTransfer.dropEffect = 'move';
-      } catch {}
-    },
-    onTaskDropOnItem(list, t, ti, ev) {
-      try {
-        if (!this.ui.drop || this.ui.drop.listId !== list.id) {
-          // fallback to drop before/after hovered item
-          const rect = ev.currentTarget?.getBoundingClientRect();
-          const mid = rect ? (rect.top + rect.height / 2) : ev.clientY;
-          const before = ev.clientY < mid;
-          const baseIdx = list.tasks.findIndex(x=>x.id===t.id);
-          const idx = baseIdx >= 0 ? baseIdx : ti;
-          const dropIndex = before ? idx : idx + 1;
-          this.ui.drop = { listId: list.id, index: Math.max(0, Math.min(dropIndex, list.tasks.length)) };
-        }
-      } catch {}
-      this.commitTaskDrop();
-    },
-    onListDragOver(list, ev) {
-      try {
-        if (!this.ui.drop) this.ui.drop = {};
-        // Default to end-of-list when hovering container (not a row)
-        this.ui.drop.listId = list.id;
-        this.ui.drop.index = (list.tasks && list.tasks.length) ? list.tasks.length : 0;
-        if (ev?.dataTransfer) ev.dataTransfer.dropEffect = 'move';
-      } catch {}
-    },
-    onListDrop(list, ev) {
-      this.commitTaskDrop();
-    },
-    commitTaskDrop() {
-      try {
-        const drag = this.ui.drag || {};
-        const drop = this.ui.drop || {};
-        if (!drag.taskId || !drag.srcListId || !drop.listId || drop.index == null) { this.clearDragState(); return; }
-        const srcId = drag.srcListId; const dstId = drop.listId;
-        const curInd = drop.index;
-        this.mutate('dndMoveTask', () => {
-          const srcList = this.lists.find(l=>l.id===srcId);
-          const destList = this.lists.find(l=>l.id===dstId);
-          if (!srcList || !destList) return;
-          const curIdx = srcList.tasks.findIndex(t=>t.id===drag.taskId);
-          if (curIdx < 0) return;
-          if (srcList.id === destList.id && (curInd === curIdx || curInd === curIdx + 1)) return;
-          const [task] = srcList.tasks.splice(curIdx, 1);
-          let insert = curInd;
-          if (destList.id === srcList.id && insert > curIdx) insert -= 1;
-          insert = Math.max(0, Math.min(insert, destList.tasks.length));
-          destList.tasks.splice(insert, 0, task);
-          this.ui.taskActionsId = null;
-        });
-      } catch {}
-      this.clearDragState();
-    },
-    clearDragState() {
-      try {
-        if (this.ui.drag) { this.ui.drag.taskId = null; this.ui.drag.srcListId = null; this.ui.drag.srcIndex = null; }
-        if (this.ui.drop) { this.ui.drop.listId = null; this.ui.drop.index = null; }
-        this.ui.isDragging = false;
-      } catch {}
-    },
-    taskDnDClass(list, t, ti) {
-      try {
-        const out = {};
-        if (this.ui.drag && this.ui.drag.taskId === t.id) out['dragging'] = true;
-        const drop = this.ui.drop;
-        if (drop && drop.listId === list.id) {
-          const lastIdx = (list.tasks?.length || 0) - 1;
-          if (drop.index === ti) out['drop-before'] = true;
-          if (drop.index === ti + 1) out['drop-after'] = true;
-          if (drop.index === (lastIdx + 1) && ti === lastIdx) out['drop-after'] = true;
-        }
-        return out;
-      } catch { return {}; }
     },
     sampleToDo(){
       const samples = [
@@ -1128,6 +1324,23 @@ export default {
         'Polish the silver surfer', 'Refactor the holocron API'
       ];
       return samples[Math.floor(Math.random()*samples.length)];
+    },
+    sampleNote(){
+      const lines = [
+        '“Roads? Where we’re going, we don’t need roads.” – Doc Brown',
+        '“May the Force be with you.” – Obi-Wan Kenobi',
+        '“To infinity and beyond!” – Buzz Lightyear',
+        '“I solemnly swear I am up to no good.” – Marauder’s Map',
+        '“Just keep swimming.” – Dory',
+        '“Great Scott!” – Doc Brown',
+        '“This is the way.” – Din Djarin',
+        '“I am Groot.” – Groot',
+        '“You’re gonna need a bigger boat.” – Chief Brody',
+        '“Here’s looking at you, kid.” – Rick Blaine',
+        '“I’m Batman.” – Batman',
+        '“I’ll be back.” – Terminator'
+      ];
+      return lines[Math.floor(Math.random() * lines.length)];
     },
     updateAccentFromBackground(){
       try {
@@ -1256,23 +1469,10 @@ export default {
       }
     };
         closeIfOutside('listActionsId','list-');
-        closeIfOutside('flowActionsId','flow-');
-        closeIfOutside('stepActionsId','step-');
-        closeIfOutside('stepTaskActionsId','steptask-');
         closeIfOutside('taskActionsId','task-');
         closeIfOutside('historyActionsKey','history-');
         if (!this.ui.currentViewMenuOpen) this.ui.currentViewDeleteConfirm = false;
         // close view menus if clicked outside
-        try {
-          const lv = document.getElementById('menu-listview');
-          const la = document.getElementById('anchor-listview');
-          if (this.ui.listViewMenuOpen && lv && !(lv===t || lv.contains(t) || (la && (la===t || la.contains(t))))) this.ui.listViewMenuOpen = false;
-        } catch {}
-        try {
-          const fv = document.getElementById('menu-flowview');
-          const fa = document.getElementById('anchor-flowview');
-          if (this.ui.flowViewMenuOpen && fv && !(fv===t || fv.contains(t) || (fa && (fa===t || fa.contains(t))))) this.ui.flowViewMenuOpen = false;
-        } catch {}
         try {
           const cv = document.getElementById('menu-currentview');
           const ca = document.getElementById('anchor-currentview');
@@ -1291,13 +1491,10 @@ export default {
     save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         lists: this.lists,
-        flows: this.flows,
         history: this.history,
         listTitles: this.listTitles,
         listViews: this.listViews,
-        flowViews: this.flowViews,
         currentListViewId: this.currentListViewId,
-        currentFlowViewId: this.currentFlowViewId,
       }));
     },
     tabBtn(n) { return this.tab===n ? 'active font-semibold' : ''; },
@@ -1314,12 +1511,9 @@ export default {
 
     /* --- menus --- */
   closeAllMenus() {
-    this.ui.listAddMenuId = null; this.ui.selectedFlowId = '';
-    this.ui.listActionsId = this.ui.flowActionsId = this.ui.stepActionsId =
-      this.ui.stepTaskActionsId = this.ui.taskActionsId = null;
+    this.ui.listAddMenuId = null;
+    this.ui.listActionsId = this.ui.taskActionsId = null;
     this.ui.historyActionsKey = null;
-    this.ui.listViewMenuOpen = false;
-    this.ui.flowViewMenuOpen = false;
     this.ui.currentViewMenuOpen = false;
     this.ui.currentViewDeleteConfirm = false;
     this.ui.draggingListId = null;
@@ -1331,11 +1525,14 @@ export default {
       const opening = this.ui.listAddMenuId !== id;
       this.ui.listAddMenuId = opening ? id : null;
       if (!opening) return;
-      this.ui.addMode = 'task';
+      const list = this.lists.find(l=>l.id===id);
+      const last = list?.tasks?.[list.tasks.length-1];
+      if (last?.type === 'note') this.ui.addMode = 'note';
+      else this.ui.addMode = 'task';
       this.ui.placeholderSample = this.sampleToDo();
       this.ui.newTaskTitle = this.ui.placeholderSample;
-      // default flow selection to first available
-      this.ui.selectedFlowId = (this.flows[0] && this.flows[0].id) ? this.flows[0].id : '';
+      this.ui.notePlaceholderSample = this.sampleNote();
+      this.ui.newNoteBody = this.ui.notePlaceholderSample;
       this.$nextTick(() => this.decideAddMenuPlacement(id));
     },
     toggleNewListMenu(ev){
@@ -1404,52 +1601,103 @@ export default {
     },
     deleteCurrentView(){
       const current = this.listViews.find(v=>v.id===this.currentListViewId);
-      if (!current || (current.name||'').toLowerCase() === 'home') {
+      if (!current || (current.name||'').toLowerCase() === 'main') {
         this.ui.currentViewDeleteConfirm = false;
         this.ui.currentViewMenuOpen = false;
         return;
       }
       this.mutate('deleteListView', ()=>{
-        this.listViews = this.listViews.filter(v=>v.id!==current.id);
+        const targetName = (current.name || '').trim();
+        const toRemove = new Set(
+          (this.listViews||[])
+            .filter(v=>{
+              const name = (v.name||'').trim();
+              return name === targetName || name.startsWith(targetName + '/');
+            })
+            .map(v=>v.id)
+        );
+        this.listViews = this.listViews.filter(v=>!toRemove.has(v.id));
         const homeId = this.homeListViewId();
         (this.lists||[]).forEach(list=>{
-          if (list.viewId === current.id) list.viewId = homeId;
+          if (toRemove.has(list.viewId)) list.viewId = homeId;
+          if (!Array.isArray(list.tasks)) return;
+          list.tasks = list.tasks.filter(task=>{
+            const links = Array.isArray(task.links) ? task.links : [];
+            if (links.some(l=>toRemove.has(l?.viewId))) return false;
+            return true;
+          });
         });
         this.syncListMembership();
-        this.currentListViewId = homeId;
+        if (!this.listViews.some(v=>v.id===this.currentListViewId)) {
+          this.currentListViewId = homeId;
+        }
       });
       this.ui.currentViewDeleteConfirm = false;
       this.ui.currentViewMenuOpen = false;
     },
+    openViewFromTree(node, closeAddMenu=false){
+      if (!node || node.type!=='view' || !node.viewId) return;
+      this.switchListView(node.viewId);
+      if (closeAddMenu) this.toggleAddMenu(null);
+    },
     startListDrag(list, idx, ev){
       try {
+        if (ev?.target?.closest('.task-item')) {
+          ev?.preventDefault?.();
+          return;
+        }
         ev.dataTransfer?.setData('text/plain', list.id);
         ev.dataTransfer?.setDragImage?.(ev.currentTarget, ev.offsetX, ev.offsetY);
       } catch {}
+      this._dragOriginalOrder = this._deepClone(this.lists);
       this.ui.draggingListId = list.id;
       this.ui.draggingListIndex = idx;
     },
     onListDragOverCard(list, idx, ev){
       ev.preventDefault();
+      const dragId = this.ui.draggingListId;
+      if (!dragId || dragId === list.id) return;
+      const rect = ev?.currentTarget?.getBoundingClientRect();
+      const width = rect?.width || 1;
+      const x = rect ? ev.clientX - rect.left : width / 2;
+      const ratio = Math.min(Math.max(x / width, 0), 1);
+      const place = ratio <= 0.45 ? 'before' : 'after';
+      this.previewListReorder(dragId, list.id, place);
     },
     onListDrop(list, idx, ev){
       ev.preventDefault();
       const dragId = this.ui.draggingListId;
-      if (!dragId || dragId === list.id) return;
-      const fromIdx = this.lists.findIndex(l=>l.id===dragId);
-      const toIdx = this.lists.findIndex(l=>l.id===list.id);
-      if (fromIdx < 0 || toIdx < 0 || dragId === list.id) { this.endListDrag(); return; }
+      const original = this._dragOriginalOrder;
+      if (!dragId || !original) { this.endListDrag(true); return; }
+      const finalOrder = this._deepClone(this.lists);
+      const changed = JSON.stringify(original.map(l=>l.id)) !== JSON.stringify(finalOrder.map(l=>l.id));
+      this._dragOriginalOrder = null;
+      if (!changed) { this.endListDrag(true); return; }
+      this.lists = original;
       this.mutate('reorderLists', ()=>{
-        const moving = this.lists.splice(fromIdx,1)[0];
-        let insertIdx = this.lists.findIndex(l=>l.id===list.id);
-        if (insertIdx < 0) insertIdx = this.lists.length;
-        this.lists.splice(insertIdx,0,moving);
+        this.lists = finalOrder;
       });
-      this.endListDrag();
+      this.endListDrag(true);
     },
-    endListDrag(){
+    endListDrag(success=false){
+      if (!success && this._dragOriginalOrder) {
+        this.lists = this._dragOriginalOrder;
+      }
+      this._dragOriginalOrder = null;
       this.ui.draggingListId = null;
       this.ui.draggingListIndex = -1;
+    },
+    previewListReorder(dragId, targetId, place='before'){
+      const fromIdx = this.lists.findIndex(l=>l.id===dragId);
+      const toIdx = this.lists.findIndex(l=>l.id===targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      if (fromIdx === toIdx && place === 'before') return;
+      const [moving] = this.lists.splice(fromIdx, 1);
+      let insertIdx = this.lists.findIndex(l=>l.id===targetId);
+      if (insertIdx < 0) insertIdx = this.lists.length;
+      if (place === 'after') insertIdx += 1;
+      insertIdx = Math.max(0, Math.min(insertIdx, this.lists.length));
+      this.lists.splice(insertIdx, 0, moving);
     },
     decideAddMenuPlacement(listId){
       try {
@@ -1488,48 +1736,22 @@ export default {
       if (!opening) this.ui.listDeleteConfirmId = null;
       this.$nextTick(()=>this.decideMenuDir('list-'+id, ev));
     },
-    toggleFlowActions(id, ev){ this.ui.flowActionsId = this.ui.flowActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('flow-'+id, ev)); },
-    toggleStepActions(id, ev){ this.ui.stepActionsId = this.ui.stepActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('step-'+id, ev)); },
-    toggleStepTaskActions(id, ev){ this.ui.stepTaskActionsId = this.ui.stepTaskActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('steptask-'+id, ev)); },
     toggleTaskActions(id, ev){ this.ui.taskActionsId = this.ui.taskActionsId===id ? null : id; this.$nextTick(()=>this.decideMenuDir('task-'+id, ev)); },
     openTaskMenu(list, t, ev){
       const id = t.id;
       this.ui.taskActionsId = this.ui.taskActionsId===id ? null : id;
       this.$nextTick(()=>this.decideMenuDir('task-'+id, ev));
     },
-    toggleListViewMenu(ev){
-      const opening = !this.ui.listViewMenuOpen;
-      this.ui.listViewMenuOpen = opening;
-      this.ui.listViewEditName = this.listViewName || '';
-      if (opening) {
-        this.ui.listViewNameEditing = true;
-        this.$nextTick(()=>{ try { this.$refs.listViewNameInput?.focus(); this.$refs.listViewNameInput?.select(); } catch {} this.decideMenuDir('listview', ev); });
-      } else {
-        this.$nextTick(()=>this.decideMenuDir('listview', ev));
-      }
-    },
     openListViewEditMenu(ev){
-      this.ui.listViewMenuOpen = true;
+      const v = this.listViews.find(x=>x.id===this.currentListViewId);
+      const raw = (v?.name || 'Main').trim() || 'Main';
+      const parts = raw.split('/').map(s=>s.trim()).filter(Boolean);
+      const prefix = parts.slice(0, -1).join('/');
+      const label = parts.length ? parts[parts.length-1] : raw;
+      this.ui.listViewEditPrefix = prefix;
+      this.ui.listViewEditName = label;
       this.ui.listViewNameEditing = true;
-      this.ui.listViewEditName = this.listViewName || '';
-      this.$nextTick(()=>{ try { this.$refs.listViewNameInput?.focus(); } catch {} this.decideMenuDir('listview', ev); });
-    },
-    toggleFlowViewMenu(ev){
-      const opening = !this.ui.flowViewMenuOpen;
-      this.ui.flowViewMenuOpen = opening;
-      this.ui.flowViewEditName = this.flowViewName || '';
-      if (opening) {
-        this.ui.flowViewNameEditing = true;
-        this.$nextTick(()=>{ try { this.$refs.flowViewNameInput?.focus(); this.$refs.flowViewNameInput?.select(); } catch {} this.decideMenuDir('flowview', ev); });
-      } else {
-        this.$nextTick(()=>this.decideMenuDir('flowview', ev));
-      }
-    },
-    openFlowViewEditMenu(ev){
-      this.ui.flowViewMenuOpen = true;
-      this.ui.flowViewNameEditing = true;
-      this.ui.flowViewEditName = this.flowViewName || '';
-      this.$nextTick(()=>{ try { this.$refs.flowViewNameInput?.focus(); } catch {} this.decideMenuDir('flowview', ev); });
+      this.$nextTick(()=>{ try { this.$refs.listViewNameInput?.focus(); } catch {} });
     },
     openHistoryMenu(lid, h, ev){
       const key = lid + '-' + h.id + '-' + (h.completedAt||0);
@@ -1573,9 +1795,13 @@ export default {
         this.lists.push(list);
         this.listTitles[list.id] = list.title;
         const view = this.listViews.find(v=>v.id===this.currentListViewId) || this.listViews[0];
-        if (view) {
+        const homeId = this.homeListViewId();
+        if (view && view.id) {
+          list.viewId = view.id;
           if (!Array.isArray(view.listIds)) view.listIds = [];
           if (!view.listIds.includes(list.id)) view.listIds.push(list.id);
+        } else {
+          list.viewId = homeId;
         }
         this.closeAllMenus();
       });
@@ -1598,10 +1824,9 @@ export default {
           const ts = Date.now();
           // record each task as a deleted history item
           list.tasks.forEach(t => {
-            this.history[id].unshift({
-              id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
-              stepIndex: t.stepIndex ?? null, completedAt: ts, action: 'deleted', viewId: this.currentListViewId || null
-            });
+            const entry = this.buildHistoryEntry(t, 'deleted');
+            entry.completedAt = ts;
+            this.history[id].unshift(entry);
           });
           // If list has no tasks, ensure it still appears in history
           if (list.tasks.length === 0) {
@@ -1622,7 +1847,7 @@ export default {
     promptAddTask(list) {
       const title = prompt('Task title?'); if (!title) return;
       this.mutate('addTaskPrompt', () => {
-        list.tasks.push({ id: uid(), title: title.trim(), fromFlowId: null, stepIndex: null });
+        list.tasks.push({ id: uid(), type: 'task', title: title.trim() });
         this.toggleAddMenu(null);
       });
     },
@@ -1630,19 +1855,54 @@ export default {
       const t = (this.ui.newTaskTitle || '').trim();
       if (!t) return;
       this.mutate('addTask', () => {
-        list.tasks.push({ id: uid(), title: t, fromFlowId: null, stepIndex: null });
+        list.tasks.push({ id: uid(), type: 'task', title: t });
         this.toggleAddMenu(null);
       });
     },
+    addNoteToList(list){
+      const rawInput = this.ui.newNoteBody != null ? this.ui.newNoteBody.toString() : '';
+      const trimmed = rawInput.trim();
+      const placeholder = (this.ui.notePlaceholderSample||'').trim();
+      const body = trimmed && trimmed !== placeholder ? rawInput : this.sampleNote();
+      if (!body) return;
+      this.mutate('addNote', () => {
+        const note = this.normalizeTask({ id: uid(), type: 'note', title: body.slice(0, 48) || 'Note', body });
+        list.tasks.push(note);
+        this.ui.newNoteBody = '';
+        this.toggleAddMenu(null);
+      });
+    },
+    canAddCurrent(){
+      if (this.ui.addMode === 'task') return !!(this.ui.newTaskTitle || '').trim();
+      if (this.ui.addMode === 'note') {
+        const body = (this.ui.newNoteBody || '').trim();
+        const placeholder = (this.ui.notePlaceholderSample || '').trim();
+        return body && body !== placeholder;
+      }
+      if (this.ui.addMode === 'view') return true;
+      return false;
+    },
+    handleAdd(list){
+      if (this.ui.addMode === 'task') {
+        this.addTaskWithTitle(list);
+      } else if (this.ui.addMode === 'note') {
+        this.addNoteToList(list);
+      } else if (this.ui.addMode === 'view') {
+        this.promptNewViewPath(this.listViewName);
+        this.toggleAddMenu(null);
+      }
+    },
     setAddMode(mode){
       this.ui.addMode = mode;
-      if (mode === 'flow') {
-        if (!this.ui.selectedFlowId) {
-          const first = this.flows[0];
-          if (first) this.ui.selectedFlowId = first.id;
-        }
-      } else if (mode === 'task') {
+      if (mode === 'task') {
         if (!this.ui.newTaskTitle) this.ui.newTaskTitle = 'ToDo';
+      } else if (mode === 'view') {
+        this.ui.newNoteBody = '';
+      } else if (mode === 'note') {
+        if (!this.ui.newNoteBody) {
+          this.ui.notePlaceholderSample = this.sampleNote();
+          this.ui.newNoteBody = this.ui.notePlaceholderSample;
+        }
       }
     },
     onTaskTitleFocus(e){
@@ -1657,6 +1917,17 @@ export default {
         this.ui.newTaskTitle = this.ui.placeholderSample;
       }
     },
+    onNoteBodyFocus(){
+      if ((this.ui.newNoteBody || '').trim() === (this.ui.notePlaceholderSample||'').trim()) {
+        this.ui.newNoteBody = '';
+      }
+    },
+    onNoteBodyBlur(){
+      if (!(this.ui.newNoteBody || '').trim()) {
+        this.ui.notePlaceholderSample = this.sampleNote();
+        this.ui.newNoteBody = this.ui.notePlaceholderSample;
+      }
+    },
     editTask(list, t) {
       const v = prompt('Edit task', t.title); if (!v) return;
       this.mutate('editTask', () => { t.title = v.trim(); this.closeAllMenus(); });
@@ -1664,77 +1935,151 @@ export default {
     removeTask(list, taskId) {
       this.mutate('removeTask', () => {
         try {
-          const t = list.tasks.find(x=>x.id===taskId);
+          const t = (list.tasks||[]).find(x=>x.id===taskId);
           if (t) {
             if (!this.history[list.id]) this.history[list.id] = [];
-            this.history[list.id].unshift({
-              id: t.id, title: t.title, fromFlowId: t.fromFlowId || null,
-              stepIndex: t.stepIndex ?? null, completedAt: Date.now(), action: 'deleted', viewId: this.currentListViewId || null
-            });
+            this.history[list.id].unshift(this.buildHistoryEntry(t, 'deleted'));
           }
         } catch {}
-        list.tasks = list.tasks.filter(t=>t.id!==taskId);
+        list.tasks = (list.tasks||[]).filter(t=>t.id!==taskId);
         if (this.ui.taskActionsId===taskId) this.ui.taskActionsId = null;
       });
     },
-
-    /* --- flows applied to lists (runtime) --- */
-    addFlowToList(list, flowId) {
-      const f = this.flows.find(x=>x.id===flowId); if (!f) return;
-      const first = f.steps[0];
-      this.mutate('addFlowTaskToList', () => {
-        if (first?.taskTitle?.trim()) {
-          list.tasks.push({
-            id: uid(), title: first.taskTitle.trim(), fromFlowId: f.id, stepIndex: 0
-          });
+    onTaskDragStart(list, task, index, ev){
+      try {
+        ev?.stopPropagation?.();
+        this.closeAllMenus();
+        this.ui.drag = { taskId: task.id, srcListId: list.id, srcIndex: index };
+        this.ui.drop = { listId: list.id, index };
+        this.ui.isDragging = true;
+        this._taskOriginalOrder = this._deepClone(this.lists);
+        ev?.dataTransfer?.setData('text/plain', task.id);
+        ev?.dataTransfer && (ev.dataTransfer.effectAllowed = 'move');
+      } catch {}
+    },
+    onTaskDragEnd(ev){
+      if (!this._taskOriginalOrder) return;
+      this.endTaskDrag(false);
+    },
+    onTaskDragOver(list, task, index, ev){
+      try {
+        if (!this.ui.drag?.taskId) return;
+        const rect = ev?.currentTarget?.getBoundingClientRect();
+        const ratio = rect ? ((ev.clientY - rect.top) / Math.max(rect.height, 1)) : 0.5;
+        const insertIdx = ratio <= 0.4 ? index : index + 1;
+        this.previewTaskReorder(list.id, insertIdx);
+      } catch {}
+    },
+    onTaskDropOnItem(list, task, index, ev){
+      ev.preventDefault();
+      try {
+        const rect = ev?.currentTarget?.getBoundingClientRect();
+        const ratio = rect ? ((ev.clientY - rect.top) / Math.max(rect.height, 1)) : 0.5;
+        const insertIdx = ratio <= 0.4 ? index : index + 1;
+        this.previewTaskReorder(list.id, insertIdx);
+      } catch {}
+      this.commitTaskDrop();
+    },
+    onTaskListDragOver(list, ev){
+      try {
+        if (!this.ui.drag?.taskId) return;
+        const rect = ev?.currentTarget?.getBoundingClientRect();
+        const y = rect ? ev.clientY - rect.top : 0;
+        const height = rect?.height || 1;
+        const ratio = Math.min(Math.max(y / height, 0), 1);
+        const length = list.tasks?.length || 0;
+        const insertIdx = Math.max(0, Math.min(length, Math.floor(ratio * (length + 0.6))));
+        this.previewTaskReorder(list.id, insertIdx);
+        ev?.dataTransfer && (ev.dataTransfer.dropEffect = 'move');
+      } catch {}
+    },
+    onTaskListDrop(list, ev){
+      ev.preventDefault();
+      this.commitTaskDrop();
+    },
+    previewTaskReorder(targetListId, insertIdx){
+      try {
+        const dragState = this.ui.drag;
+        if (!dragState?.taskId) return;
+        const dragId = dragState.taskId;
+        const sourceList = (this.lists||[]).find(l => (l.tasks||[]).some(t=>t.id===dragId));
+        const targetList = this.lists.find(l=>l.id===targetListId);
+        if (!sourceList || !targetList) return;
+        const fromIdx = sourceList.tasks.findIndex(t=>t.id===dragId);
+        if (fromIdx < 0) return;
+        const [task] = sourceList.tasks.splice(fromIdx,1);
+        let targetIdx = Math.max(0, Math.min(insertIdx, targetList.tasks.length));
+        if (sourceList.id === targetList.id && targetIdx > fromIdx) targetIdx -= 1;
+        const prevDrop = this.ui.drop;
+        if (prevDrop && prevDrop.listId === targetList.id && prevDrop.index === targetIdx) {
+          sourceList.tasks.splice(fromIdx,0,task);
+          return;
         }
-        this.toggleAddMenu(null);
-        this.ui.selectedFlowId = '';
-      });
+        targetList.tasks.splice(targetIdx,0,task);
+        this.ui.drop = { listId: targetList.id, index: targetIdx };
+      } catch {}
+    },
+    commitTaskDrop(){
+      try {
+        const original = this._taskOriginalOrder;
+        if (!original) { this.endTaskDrag(true); return; }
+        const finalOrder = this._deepClone(this.lists);
+        const changed = JSON.stringify(original.map(l=>l.tasks.map(t=>t.id))) !== JSON.stringify(finalOrder.map(l=>l.tasks.map(t=>t.id)));
+        this._taskOriginalOrder = null;
+        if (!changed) { this.endTaskDrag(true); return; }
+        this.lists = original;
+        this.mutate('moveTask', ()=>{ this.lists = finalOrder; });
+      } catch {}
+      this.endTaskDrag(true);
+    },
+    endTaskDrag(success){
+      if (!success && this._taskOriginalOrder) {
+        this.lists = this._taskOriginalOrder;
+      }
+      this._taskOriginalOrder = null;
+      this.ui.drag = null;
+      this.ui.drop = null;
+      this.ui.isDragging = false;
+    },
+    taskDnDClass(list, task, index){
+      try {
+        const out = {};
+        const drag = this.ui.drag;
+        const drop = this.ui.drop;
+        if (drag?.taskId === task.id) out.dragging = true;
+        if (drop && drop.listId === list.id) {
+          if (drop.index === index) out['drop-before'] = true;
+          if (drop.index === index + 1) out['drop-after'] = true;
+        }
+        return out;
+      } catch { return {}; }
+    },
+    onTaskRowClick(list, t){
+      this.openItemView(list, t);
     },
 
+    /* --- task completion --- */
     completeTask(list, task, ev) {
-      // animate + play sound, then commit after a short delay
-      this.$set ? this.$set(this.ui.completing, task.id, true) : (this.ui.completing[task.id] = true);
-      // detect if this is the last step of a flow
-      let isFinalFlow = false;
-      if (task.fromFlowId != null) {
-        const flow = this.flows.find(f=>f.id===task.fromFlowId);
-        const nextIdx = (task.stepIndex ?? 0) + 1;
-        if (!flow || !flow.steps[nextIdx]?.taskTitle?.trim()) {
-          isFinalFlow = true;
-        }
+      if ((task?.type || 'task') === 'note') {
+        this.openItemView(list, task);
+        return;
       }
-      this.playSuccessSound(isFinalFlow);
+      if (this.isMilestone(task)) return;
+      this.$set ? this.$set(this.ui.completing, task.id, true) : (this.ui.completing[task.id] = true);
+      this.playSuccessSound();
       setTimeout(() => {
-        // record state right before applying the completion change
+        this.finishTaskCompletion(list, task);
+      }, 320);
+    },
+    finishTaskCompletion(list, task){
+      try {
         this.pushUndo('completeTask');
         if (!this.history[list.id]) this.history[list.id] = [];
-        this.history[list.id].unshift({
-          id: task.id, title: task.title, fromFlowId: task.fromFlowId || null,
-          stepIndex: task.stepIndex ?? null, completedAt: Date.now(), action: 'completed', viewId: this.currentListViewId || null
-        });
-        // remove from list
-        list.tasks = list.tasks.filter(t=>t.id!==task.id);
-
-        // if came from a flow, consider adding next step
-        if (task.fromFlowId != null) {
-          const flow = this.flows.find(f=>f.id===task.fromFlowId);
-          if (flow) {
-            const nextIdx = (task.stepIndex ?? 0) + 1;
-            const next = flow.steps[nextIdx];
-            if (next?.taskTitle?.trim()) {
-              const already = list.tasks.some(t=>t.fromFlowId===flow.id && t.stepIndex===nextIdx && t.title===next.taskTitle.trim());
-              if (!already) {
-                list.tasks.push({ id: uid(), title: next.taskTitle.trim(), fromFlowId: flow.id, stepIndex: nextIdx });
-              }
-            }
-          }
-        }
+        this.history[list.id].unshift(this.buildHistoryEntry(task, 'completed'));
+        list.tasks = (list.tasks||[]).filter(t=>t.id!==task.id);
         delete this.ui.completing[task.id];
-        // clear redo since this was a new mutation
         this.ui.redoStack = [];
-      }, 320);
+      } catch {}
     },
     playSuccessSound(final=false) {
       try {
@@ -1789,53 +2134,6 @@ export default {
       const dy = Math.sin(rad) * dist;
       return { '--dx': dx + 'px', '--dy': dy + 'px', '--rot': angle + 'deg' };
     },
-
-    /* --- flows editor --- */
-    addFlow() {
-      const title = prompt('Flow title?'); if (!title) return;
-      this.mutate('addFlow', () => {
-        const f = { id: uid(), title: title.trim(), steps: [] };
-        this.flows.push(f);
-        const v = this.flowViews.find(x=>x.id===this.currentFlowViewId);
-        if (v && !v.flowIds?.includes(f.id)) { (v.flowIds||(v.flowIds=[])).push(f.id); }
-      });
-    },
-    renameFlow(flow) {
-      const v = prompt('Rename flow', flow.title); if (!v) return;
-      this.mutate('renameFlow', () => { flow.title = v.trim(); this.closeAllMenus(); });
-    },
-    removeFlow(id) {
-      if (!confirm('Delete this flow?')) return;
-      this.mutate('removeFlow', () => {
-        this.flows = this.flows.filter(f=>f.id!==id);
-        this.flowViews.forEach(v=>{ v.flowIds = (v.flowIds||[]).filter(x=>x!==id); });
-        this.closeAllMenus();
-      });
-    },
-    addStep(flow) {
-      const type = prompt('Step type (only "single" available)', 'single');
-      if (!type) return;
-      this.mutate('addStep', () => { flow.steps.push({ id: uid(), type: type.trim().toLowerCase(), taskTitle: '' }); });
-    },
-    deleteStep(flow, stepId) {
-      this.mutate('deleteStep', () => { flow.steps = flow.steps.filter(s=>s.id!==stepId); this.closeAllMenus(); });
-    },
-    renameStep(step) {
-      const v = prompt('Rename step label (optional note)', step.note || ''); // optional note
-      if (v===null) return;
-      this.mutate('renameStep', () => { step.note = v.trim(); this.closeAllMenus(); });
-    },
-    addStepTask(step) {
-      const v = prompt('Task title for this step'); if (!v) return;
-      this.mutate('addStepTask', () => { step.taskTitle = v.trim(); this.closeAllMenus(); });
-    },
-    renameStepTask(step) {
-      const v = prompt('Edit task title', step.taskTitle || ''); if (!v) return;
-      this.mutate('renameStepTask', () => { step.taskTitle = v.trim(); this.closeAllMenus(); });
-    },
-    removeStepTask(step) {
-      this.mutate('removeStepTask', () => { step.taskTitle = ''; this.closeAllMenus(); });
-    },
   },
 };
 </script>
@@ -1843,3 +2141,5 @@ export default {
 <style>
 html, body, #app { height: 100%; margin: 0; }
 </style>
+
+

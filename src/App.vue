@@ -7,18 +7,28 @@
       <aside
         class="z-20 md:relative md:z-0 h-full side-rail backdrop-blur transition-all duration-300 overflow-hidden"
         :class="sideClass"
+        ref="sideRail"
       >
         <div class="h-full flex flex-col">
           <div class="flex items-center justify-between px-3 py-3">
             <div class="flex items-center gap-2 font-semibold">
               <span class="hidden md:inline">ToDojo</span>
             </div>
-            <button class="btn-ghost no-hover md:hidden" @click.stop="closeSide" aria-label="Close menu">
+            <button class="btn-ghost no-hover md:hidden" ref="sideToggleMobile" @click.stop="closeSide" aria-label="Close menu">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6l-12 12"/></svg>
             </button>
           </div>
 
           <nav class="p-2 space-y-1 text-sm">
+            <button class="menu-item w-full flex items-center gap-2" :class="{ 'is-active': tab==='lists' }" @click="openFromSide('lists')">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M4 6h.01M8 12h12M4 12h.01M8 18h12M4 18h.01"/></svg>
+              <span>Lists</span>
+            </button>
+            <button class="menu-item w-full flex items-center gap-2" :class="{ 'is-active': tab==='stats' }" @click="openFromSide('stats')">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M7 16l4-4 3 3 5-7"/></svg>
+              <span>Statistics</span>
+            </button>
+            <div class="divider"></div>
             <button class="menu-item w-full flex items-center gap-2" :class="{ 'is-active': tab==='history' }" @click="openFromSide('history')">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
               <span>History</span>
@@ -40,24 +50,24 @@
       <!-- MAIN COLUMN -->
       <div class="flex-1 flex flex-col overflow-hidden">
         <!-- TOP BAR -->
-        <div class="flex items-center justify-between px-3 py-2 bg-surface topbar">
-          <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-start justify-between gap-2 px-3 py-2 bg-surface topbar">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
             <button class="btn-ghost no-hover md:hidden" @click.stop="ui.sideOpen = true" aria-label="Open menu">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
             </button>
             <!-- Desktop side toggle on the left -->
-            <button class="btn-ghost no-hover hidden md:inline-flex" @click.stop="toggleSideMd" title="Toggle menu" aria-label="Toggle side menu">
+            <button class="btn-ghost no-hover hidden md:inline-flex" ref="sideToggleMd" @click.stop="toggleSideMd" title="Toggle menu" aria-label="Toggle side menu">
               <svg v-if="ui.sideOpen" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
               <svg v-else class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
             </button>
-            <h1 class="text-lg font-semibold">
+            <h1 class="text-lg font-semibold min-w-0">
               <span v-if="tab==='lists'">Lists</span>
               <span v-else-if="tab==='history'">History</span>
               <span v-else-if="tab==='rules'">Rules</span>
               <span v-else-if="tab==='settings'">Settings</span>
               <span v-else>Statistics</span>
             </h1>
-            <div v-if="tab==='lists'" class="view-path flex items-center gap-1 text-sm">
+            <div v-if="tab==='lists'" class="view-path flex flex-wrap items-center gap-1 text-sm w-full sm:w-auto">
               <template v-if="ui.listViewNameEditing">
                 <div class="view-edit-inline flex items-center gap-1">
                   <span v-if="ui.listViewEditPrefix" class="text-sec text-xs">{{ ui.listViewEditPrefix }}/</span>
@@ -226,12 +236,18 @@
                         {{ linkedViewName(t) || t.title }}
                       </span>
                     </div>
-                    <div v-else class="note-body text-sec whitespace-pre-line text-left w-full">
+                    <div class="note-body text-sec whitespace-pre-line text-left w-full">
                       {{ t.body }}
+                      <span v-if="noteHasChildren(t)" class="note-child-indicator">Sub view available</span>
                     </div>
                   </div>
 
                   <div v-if="isMilestone(t)" class="milestone-check order-3" :title="milestonePercent(t) + '% complete'">
+                    <div class="faux-checkbox locked">
+                      <span class="milestone-percent">{{ milestonePercent(t) }}</span>
+                    </div>
+                  </div>
+                  <div v-else-if="noteHasChildren(t)" class="milestone-check order-3" :title="milestonePercent(t) + '% complete'">
                     <div class="faux-checkbox locked">
                       <span class="milestone-percent">{{ milestonePercent(t) }}</span>
                     </div>
@@ -625,7 +641,7 @@ export default {
     sideClass() {
       // small: fixed drawer width; md+: collapsible width
       return [
-        'w-72',
+        'w-60',
         this.ui.sideOpen ? 'translate-x-0' : '-translate-x-72 md:translate-x-0 md:w-0',
         'fixed md:static left-0 top-0 md:top-auto md:left-auto'
       ].join(' ');
@@ -989,6 +1005,11 @@ export default {
     viewHasContent(viewId){
       const stats = this.getViewProgress(viewId);
       return !!stats?.hasContent;
+    },
+    noteHasChildren(task){
+      if ((task?.type || 'task') !== 'note') return false;
+      const viewId = this.getLinkedViewId(task);
+      return !!viewId && this.viewHasContent(viewId);
     },
     isMilestone(task){
       const viewId = this.getLinkedViewId(task);
@@ -1808,6 +1829,14 @@ export default {
           const na = document.getElementById('anchor-newlist');
           if (this.ui.newListMenuOpen && nl && !(nl===t || nl.contains(t) || (na && (na===t || na.contains(t))))) this.closeNewListMenu();
         } catch {}
+        if (this.ui.sideOpen) {
+          const side = this.$refs.sideRail;
+          const toggles = [this.$refs.sideToggleMd, this.$refs.sideToggleMobile];
+          const clickedToggle = toggles.some(btn => btn && (btn === t || btn.contains(t)));
+          if (side && !side.contains(t) && !clickedToggle) {
+            this.closeSide();
+          }
+        }
       } catch {}
     },
     save() {

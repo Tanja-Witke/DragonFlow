@@ -49,17 +49,17 @@
 @layer components {
   .app-bg      { background-color: var(--clr-bg); background-image: var(--app-bg-image); background-size: cover; background-position: center; background-attachment: fixed; color: var(--clr-text); }
   /* Side rail: darker than cards, frosted and slightly transparent */
-  .side-rail   { background: color-mix(in oklab, var(--clr-card) 78%, black 6%); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border-color: var(--frost-border); }
-  .surface     { background: color-mix(in oklab, var(--clr-card) var(--alpha-card), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: none; color: var(--clr-text); }
-  .elev        { background: color-mix(in oklab, var(--clr-elev) var(--alpha-elev), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: none; color: var(--clr-text); }
+  .side-rail   { background: color-mix(in oklab, var(--clr-card) 78%, black 6%); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border-color: var(--frost-border); }
+  .surface     { background: color-mix(in oklab, var(--clr-card) var(--alpha-card), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: 1px solid var(--frost-border); color: var(--clr-text); }
+  .elev        { background: color-mix(in oklab, var(--clr-elev) var(--alpha-elev), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: 1px solid var(--frost-border); color: var(--clr-text); }
   .border-div  { border-color: var(--clr-border); }
   .text-main   { color: var(--clr-text); }
   .text-sec    { color: var(--clr-text-2); }
   .text-muted  { color: var(--clr-muted); }
   .text-primary{ color: var(--clr-primary); }
   .text-danger { color: var(--clr-danger); }
-  .bg-surface  { background: color-mix(in oklab, var(--clr-surface) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
-  .bg-elev     { background: color-mix(in oklab, var(--clr-elev) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
+  .bg-surface  { background: color-mix(in oklab, var(--clr-surface) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
+  .bg-elev     { background: color-mix(in oklab, var(--clr-elev) var(--alpha-bar), transparent); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); }
   .is-active   { background: color-mix(in oklab, var(--clr-elev) 85%, black 0%); color: var(--clr-text); }
 
   .btn-primary { @apply px-3 py-1.5 rounded-lg text-white shadow transition; background: var(--clr-primary); }
@@ -152,6 +152,7 @@
   .task-item.drop-after::after { bottom: -1px; }
 .note-entry { align-items: flex-start; padding-top: 0.75rem; padding-bottom: 0.75rem; min-height: auto; flex-direction: column; gap: .4rem; }
 .note-body { color: var(--clr-text-2); line-height: 1.4; white-space: pre-line; font-size: .95rem; width: 100%; text-align: left; display: block; }
+.note-child-indicator { display: inline-block; margin-top: .3rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--clr-primary); }
 .note-entry > .flex-1 { width: 100%; }
   .milestone-check .faux-checkbox {
     width: 20px;
@@ -194,7 +195,7 @@
   .add-line:hover { color: var(--clr-text); }
 
   /* Add tiles (muted full-card) */
-  .muted-tile { background: color-mix(in oklab, var(--clr-surface) var(--alpha-bar), transparent); color: var(--clr-text); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); -webkit-backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: none; cursor: pointer; }
+  .muted-tile { background: color-mix(in oklab, var(--clr-surface) var(--alpha-bar), transparent); color: var(--clr-text); backdrop-filter: saturate(var(--frost-sat)) blur(var(--frost-blur)); border: none; cursor: pointer; }
   .muted-tile:hover { background: color-mix(in oklab, var(--clr-surface) calc(var(--alpha-bar) + 6%), transparent); color: var(--clr-text); }
 
   /* Add footer: pinned bottom region of list card */

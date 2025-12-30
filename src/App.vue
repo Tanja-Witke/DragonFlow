@@ -406,9 +406,75 @@
           </div>
 
           <!-- RULES TAB -->
-          <div v-else-if="tab==='rules'" class="h-full p-3">
-            <h2 class="text-xl font-bold">Rules</h2>
-            <p class="text-sec mt-2">Use this space to define upcoming automations.</p>
+          <div v-else-if="tab==='rules'" class="h-full p-3 flex flex-col gap-4 overflow-y-auto">
+            <div class="surface rounded-2xl p-4 shadow space-y-4">
+              <div>
+                <h2 class="text-xl font-bold">Automation Rules</h2>
+                <p class="text-sec text-sm">Send work from a view into a list on a schedule.</p>
+              </div>
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="flex flex-col gap-1 text-sm">
+                  <span class="text-sec uppercase tracking-wide text-xs">Source view</span>
+                  <select class="field" v-model="ui.newRule.viewId">
+                    <option disabled value="">Select a view</option>
+                    <option v-for="view in listViews" :key="'rule-view-'+view.id" :value="view.id">
+                      {{ view.name || 'Untitled view' }}
+                    </option>
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 text-sm">
+                  <span class="text-sec uppercase tracking-wide text-xs">Target list</span>
+                  <select class="field" v-model="ui.newRule.listId">
+                    <option disabled value="">Select a list</option>
+                    <option v-for="list in lists" :key="'rule-list-'+list.id" :value="list.id">
+                      {{ list.title }}
+                    </option>
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 text-sm">
+                  <span class="text-sec uppercase tracking-wide text-xs">Start time</span>
+                  <input type="time" class="field" v-model="ui.newRule.time">
+                </label>
+                <label class="flex flex-col gap-1 text-sm">
+                  <span class="text-sec uppercase tracking-wide text-xs">Repeat</span>
+                  <select class="field" v-model="ui.newRule.repeat">
+                    <option value="once">Once</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </label>
+              </div>
+              <div class="flex justify-end">
+                <button type="button" class="btn-primary" :disabled="!canCreateRule" @click.prevent="createRule">Add rule</button>
+              </div>
+            </div>
+            <div class="flex-1 space-y-3 overflow-y-auto pr-1">
+              <div v-if="!rules.length" class="surface rounded-2xl p-4 shadow text-sec text-sm">
+                No rules yet. Create one above to start scheduling work.
+              </div>
+              <div
+                v-for="rule in rules"
+                :key="rule.id"
+                class="surface rounded-2xl p-4 shadow flex flex-col gap-2"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div class="font-semibold">{{ viewLabelForRule(rule) }} → {{ listTitle(rule.targetListId) }}</div>
+                    <div class="text-xs text-sec">{{ ruleSummary(rule) }}</div>
+                  </div>
+                  <div class="flex gap-2">
+                    <button class="btn-outline text-xs" @click="toggleRule(rule)">
+                      {{ rule.enabled ? 'Pause' : 'Enable' }}
+                    </button>
+                    <button class="btn-outline text-xs danger" @click="removeRule(rule.id)">Delete</button>
+                  </div>
+                </div>
+                <div class="text-xs text-muted flex gap-3">
+                  <span>Next run: {{ formatNextRun(rule) }}</span>
+                  <span v-if="rule.activeCopyId" class="text-primary">Waiting for completion</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- SETTINGS TAB -->
@@ -495,6 +561,7 @@ export default {
       // Views for lists
       listViews: [], // [{id,name,listIds:[] }]
       currentListViewId: '',
+      rules: [],
       history: {}, // { [listId]: [{id,title,type,body?,completedAt,action?: 'completed'|'deleted'}] }
       listTitles: {}, // { [listId]: title } - persists names for deleted lists
       ui: {
@@ -536,6 +603,12 @@ export default {
         isDragging: false,
         cardReturnAnchor: null,
         pendingScrollCardId: null,
+        newRule: {
+          viewId: '',
+          listId: '',
+          time: '09:00',
+          repeat: 'daily',
+        },
       }
     };
   },
@@ -588,6 +661,10 @@ export default {
     },
     canUndo() { return (this.ui.undoStack?.length || 0) > 0; },
     canRedo() { return (this.ui.redoStack?.length || 0) > 0; },
+    canCreateRule() {
+      const cfg = this.ui.newRule || {};
+      return !!(cfg.viewId && cfg.listId && cfg.time);
+    },
     viewProgressCache() {
       const cache = {};
       const listsByView = {};
@@ -657,7 +734,7 @@ export default {
     } catch {}
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const { lists, history, listTitles, listViews, currentListViewId } = JSON.parse(raw);
+      const { lists, history, listTitles, listViews, currentListViewId, rules } = JSON.parse(raw);
       this.lists = Array.isArray(lists) ? lists : [];
       this.history = history || {};
       // reconstruct or use stored titles
@@ -665,14 +742,17 @@ export default {
       this.lists.forEach(l => { if (!this.listTitles[l.id]) this.listTitles[l.id] = l.title; });
       this.listViews = Array.isArray(listViews) ? listViews : [];
       this.currentListViewId = currentListViewId || '';
+      this.rules = Array.isArray(rules) ? rules : [];
       this.normalizeStoredData();
       this.ensureDefaultViews();
+      this.normalizeRules();
     } else {
       const initialList = { id: uid(), title: 'My List', tasks: [] };
       this.lists = [initialList];
       this.listTitles[initialList.id] = initialList.title;
       this.history = {};
       this.ensureDefaultViews();
+      this.normalizeRules();
       this.save();
     }
   },
@@ -704,12 +784,15 @@ export default {
       } catch {}
       // Undo/Redo keyboard shortcuts
       window.addEventListener('keydown', this.handleUndoShortcut, { passive: false });
+      this.tickRules();
+      this._ruleTicker = setInterval(() => this.tickRules(), 45000);
     });
   },
   beforeDestroy(){
     window.removeEventListener('resize', this.updateListHeights);
     window.removeEventListener('click', this.handleGlobalClick);
     window.removeEventListener('keydown', this.handleUndoShortcut);
+    if (this._ruleTicker) { try { clearInterval(this._ruleTicker); } catch {} }
     if (this._accentDebounced) {
       window.removeEventListener('resize', this._accentDebounced);
       window.removeEventListener('orientationchange', this._accentDebounced);
@@ -717,16 +800,12 @@ export default {
     if (this._accentObserver) { try { this._accentObserver.disconnect(); } catch {} }
     if (this._accentPoll) { try { clearInterval(this._accentPoll); } catch {} }
   },
-  beforeDestroy(){
-    window.removeEventListener('resize', this.updateListHeights);
-    window.removeEventListener('click', this.handleGlobalClick);
-  },
-
   watch: {
     lists: { deep: true, handler() { this.save(); } },
     history: { deep: true, handler() { this.save(); } },
     listTitles: { deep: true, handler() { this.save(); } },
     listViews: { deep: true, handler() { this.save(); } },
+    rules: { deep: true, handler() { this.save(); } },
     currentListViewId(newVal) {
       this.save();
       this.handleViewChange(newVal);
@@ -785,6 +864,37 @@ export default {
         action: entry.action || 'completed',
         viewId: entry.viewId || null,
       };
+    },
+    normalizeRules() {
+      try {
+        const now = Date.now();
+        const normalized = [];
+        (this.rules || []).forEach(rule => {
+          if (!rule) return;
+          const id = rule.id || uid();
+          const sourceViewId = rule.sourceViewId || rule.viewId || '';
+          const targetListId = rule.targetListId || rule.listId || '';
+          const timeOfDay = (rule.timeOfDay || rule.time || '09:00').slice(0, 5);
+          const repeat = rule.repeat || 'daily';
+          const record = {
+            id,
+            sourceViewId,
+            targetListId,
+            timeOfDay,
+            repeat,
+            enabled: rule.enabled !== false,
+            nextRunTs: rule.nextRunTs || this.computeNextRunTs({ timeOfDay, repeat }, now),
+            deliveredSourceIds: Array.isArray(rule.deliveredSourceIds) ? rule.deliveredSourceIds.filter(Boolean) : [],
+            activeCopyId: rule.activeCopyId || null,
+            activeSourceId: rule.activeSourceId || null,
+            cycleActive: !!rule.cycleActive,
+            createdAt: rule.createdAt || now,
+            label: rule.label || 'View automation',
+          };
+          normalized.push(record);
+        });
+        this.rules = normalized;
+      } catch {}
     },
     buildHistoryEntry(task, action='deleted') {
       const normalizedTask = this.normalizeTask(task);
@@ -910,6 +1020,17 @@ export default {
         return (view?.name || '').split('/').pop() || view?.name || '';
       } catch { return ''; }
     },
+    viewLabelForRule(rule){
+      const view = this.listViews.find(v=>v.id===rule?.sourceViewId);
+      return view?.name || 'Unknown view';
+    },
+    ruleSummary(rule){
+      if (!rule) return '';
+      const repeatLabel = rule.repeat === 'weekly' ? 'Weekly'
+        : rule.repeat === 'daily' ? 'Daily'
+        : 'Once';
+      return `${repeatLabel} @ ${rule.timeOfDay || '00:00'}`;
+    },
     openItemView(list, task){
       try {
         const originViewId = this.currentListViewId || this.homeListViewId();
@@ -937,6 +1058,197 @@ export default {
         this.ui.cardReturnAnchor = { viewId: originViewId, cardId: task.id };
         this.switchListView(view.id);
         this.tab = 'lists';
+      } catch {}
+    },
+    createRule(){
+      if (!this.canCreateRule) return;
+      const cfg = { ...(this.ui.newRule || {}) };
+      this.mutate('createRule', () => {
+        const rule = {
+          id: uid(),
+          sourceViewId: cfg.viewId,
+          targetListId: cfg.listId,
+          timeOfDay: (cfg.time || '09:00').slice(0,5),
+          repeat: cfg.repeat || 'daily',
+          enabled: true,
+          nextRunTs: this.computeNextRunTs(cfg, Date.now()),
+          deliveredSourceIds: [],
+          activeCopyId: null,
+          activeSourceId: null,
+          cycleActive: false,
+          createdAt: Date.now(),
+          label: 'View automation',
+        };
+        this.rules.push(rule);
+      });
+      this.ui.newRule = { viewId: '', listId: '', time: cfg.time || '09:00', repeat: cfg.repeat || 'daily' };
+    },
+    removeRule(id){
+      this.mutate('removeRule', () => {
+        this.rules = (this.rules || []).filter(r => r.id !== id);
+      });
+    },
+    toggleRule(rule){
+      if (!rule) return;
+      this.mutate('toggleRule', () => {
+        rule.enabled = !rule.enabled;
+        if (!rule.enabled) {
+          rule.cycleActive = false;
+          rule.activeCopyId = null;
+          rule.activeSourceId = null;
+        } else if (!rule.nextRunTs) {
+          rule.nextRunTs = this.computeNextRunTs(rule, Date.now());
+        }
+      });
+    },
+    formatNextRun(rule){
+      if (!rule) return '–';
+      if (rule.cycleActive && rule.activeCopyId) return 'Active';
+      if (!rule.nextRunTs) return 'Ready';
+      return this.formatTime(rule.nextRunTs);
+    },
+    computeNextRunTs(rule, fromTs = Date.now()){
+      try {
+        const repeat = rule.repeat || 'daily';
+        const time = (rule.timeOfDay || rule.time || '09:00').split(':');
+        const h = parseInt(time[0], 10) || 0;
+        const m = parseInt(time[1], 10) || 0;
+        const base = new Date(fromTs);
+        base.setSeconds(0, 0);
+        base.setHours(h, m, 0, 0);
+        if (base.getTime() <= fromTs) {
+          base.setDate(base.getDate() + (repeat === 'weekly' ? 7 : 1));
+        }
+        return base.getTime();
+      } catch {
+        return Date.now() + 60 * 60 * 1000;
+      }
+    },
+    tickRules(){
+      try {
+        const now = Date.now();
+        (this.rules || []).forEach(rule => {
+          if (!rule || !rule.enabled) return;
+          if (!rule.cycleActive) {
+            if (!rule.nextRunTs) rule.nextRunTs = this.computeNextRunTs(rule, now);
+            if (now >= rule.nextRunTs) {
+              rule.cycleActive = true;
+              rule.deliveredSourceIds = [];
+              rule.activeCopyId = null;
+              rule.activeSourceId = null;
+            } else {
+              return;
+            }
+          }
+          if (!rule.activeCopyId) {
+            this.deployNextRuleTask(rule);
+          }
+        });
+      } catch {}
+    },
+    deployNextRuleTask(rule){
+      try {
+        if (!rule?.cycleActive || rule.activeCopyId) return;
+        const candidate = this.findNextRuleCandidate(rule);
+        if (!candidate) {
+          this.finishRuleCycle(rule);
+          return;
+        }
+        const targetList = this.lists.find(l => l.id === rule.targetListId);
+        if (!targetList) {
+          this.finishRuleCycle(rule);
+          return;
+        }
+        const sourceTask = candidate.task;
+        this.mutate('ruleInject', () => {
+          const clone = this.duplicateTaskForRule(sourceTask, rule);
+          targetList.tasks = targetList.tasks || [];
+          targetList.tasks.push(clone);
+          rule.activeCopyId = clone.id;
+          rule.activeSourceId = sourceTask.id;
+          rule.deliveredSourceIds = rule.deliveredSourceIds || [];
+          if (!rule.deliveredSourceIds.includes(sourceTask.id)) rule.deliveredSourceIds.push(sourceTask.id);
+        });
+      } catch {}
+    },
+    finishRuleCycle(rule){
+      try {
+        rule.cycleActive = false;
+        rule.activeCopyId = null;
+        rule.activeSourceId = null;
+        rule.deliveredSourceIds = [];
+        if (rule.repeat === 'once') {
+          rule.enabled = false;
+          rule.nextRunTs = null;
+        } else {
+          rule.nextRunTs = this.computeNextRunTs(rule, Date.now());
+        }
+      } catch {}
+    },
+    findNextRuleCandidate(rule){
+      try {
+        const delivered = new Set(rule.deliveredSourceIds || []);
+        const visited = new Set();
+        const walk = (viewId) => {
+          if (!viewId || visited.has(viewId)) return null;
+          visited.add(viewId);
+          const lists = this.getListsForView(viewId);
+          for (const list of lists) {
+            const tasks = Array.isArray(list.tasks) ? list.tasks : [];
+            for (const task of tasks) {
+              if (!task || (task.type || 'task') === 'note') continue;
+              const nestedView = this.isMilestone(task) ? this.getLinkedViewId(task) : '';
+              if (nestedView) {
+                const nestedCandidate = walk(nestedView);
+                if (nestedCandidate) return nestedCandidate;
+                continue;
+              }
+              if (delivered.has(task.id)) continue;
+              return { task, list };
+            }
+          }
+          return null;
+        };
+        return walk(rule.sourceViewId);
+      } catch {
+        return null;
+      }
+    },
+    getListsForView(viewId){
+      try {
+        const view = this.listViews.find(v => v.id === viewId);
+        if (!view) return [];
+        const ids = Array.isArray(view.listIds) ? view.listIds : [];
+        if (ids.length) {
+          return ids.map(id => this.lists.find(l => l.id === id)).filter(Boolean);
+        }
+        const homeId = this.homeListViewId();
+        return (this.lists || []).filter(l => (l.viewId || homeId) === viewId);
+      } catch { return []; }
+    },
+    duplicateTaskForRule(task, rule){
+      const cloned = this.normalizeTask({
+        ...task,
+        id: uid(),
+        links: [],
+      });
+      cloned.originRuleId = rule.id;
+      cloned.originSourceId = task.id;
+      return cloned;
+    },
+    handleRuleCopyCompletion(task){
+      try {
+        const ruleId = task?.originRuleId;
+        if (!ruleId) return;
+        const rule = this.rules.find(r => r.id === ruleId);
+        if (!rule) return;
+        if (rule.activeCopyId === task.id) {
+          rule.activeCopyId = null;
+          rule.activeSourceId = null;
+        }
+        if (rule.cycleActive && rule.enabled) {
+          this.deployNextRuleTask(rule);
+        }
       } catch {}
     },
     homeListViewId() {
@@ -1096,6 +1408,7 @@ export default {
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
           listViews: this._deepClone(this.listViews),
+          rules: this._deepClone(this.rules),
           currentListViewId: this.currentListViewId,
           label,
           ts: Date.now(),
@@ -1111,8 +1424,12 @@ export default {
         this.lists = this._deepClone(snap.lists || []);
         this.history = this._deepClone(snap.history || {});
         this.listTitles = this._deepClone(snap.listTitles || {});
-        if (snap.listViews) this.listViews = this._deepClone(snap.listViews);
-        if (snap.currentListViewId) this.currentListViewId = snap.currentListViewId;
+        this.listViews = this._deepClone(snap.listViews || []);
+        this.rules = this._deepClone(snap.rules || []);
+        this.currentListViewId = snap.currentListViewId || '';
+        this.normalizeStoredData();
+        this.ensureDefaultViews();
+        this.normalizeRules();
         this.$nextTick(this.updateListHeights);
       } catch {}
     },
@@ -1125,6 +1442,7 @@ export default {
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
           listViews: this._deepClone(this.listViews),
+          rules: this._deepClone(this.rules),
           currentListViewId: this.currentListViewId,
           label: 'redo', ts: Date.now()
         };
@@ -1141,6 +1459,7 @@ export default {
           history: this._deepClone(this.history),
           listTitles: this._deepClone(this.listTitles),
           listViews: this._deepClone(this.listViews),
+          rules: this._deepClone(this.rules),
           currentListViewId: this.currentListViewId,
           label: 'undo', ts: Date.now()
         };
@@ -1177,6 +1496,7 @@ export default {
             listTitles: this._deepClone(this.listTitles),
             listViews: this._deepClone(this.listViews),
             currentListViewId: this.currentListViewId,
+            rules: this._deepClone(this.rules),
           },
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1225,8 +1545,10 @@ export default {
           this.listTitles = pack.listTitles ? this._deepClone(pack.listTitles) : {};
           this.listViews = Array.isArray(pack.listViews) ? this._deepClone(pack.listViews) : [];
           this.currentListViewId = pack.currentListViewId || '';
+          this.rules = Array.isArray(pack.rules) ? this._deepClone(pack.rules) : [];
           this.normalizeStoredData();
           this.ensureDefaultViews();
+          this.normalizeRules();
         });
       } catch {}
     },
@@ -1495,6 +1817,7 @@ export default {
         listTitles: this.listTitles,
         listViews: this.listViews,
         currentListViewId: this.currentListViewId,
+        rules: this.rules,
       }));
     },
     tabBtn(n) { return this.tab===n ? 'active font-semibold' : ''; },
@@ -2077,6 +2400,7 @@ export default {
         if (!this.history[list.id]) this.history[list.id] = [];
         this.history[list.id].unshift(this.buildHistoryEntry(task, 'completed'));
         list.tasks = (list.tasks||[]).filter(t=>t.id!==task.id);
+        this.handleRuleCopyCompletion(task);
         delete this.ui.completing[task.id];
         this.ui.redoStack = [];
       } catch {}
